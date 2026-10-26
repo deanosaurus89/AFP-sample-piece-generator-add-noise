@@ -8,7 +8,7 @@ The page is a single file (`index.html`, CSS and JavaScript embedded). It runs o
 
 1. Open `index.html` in a browser, or the GitHub Pages address below.
 2. **Import CSV** (compact bar at the top): a PolyWorks AFP CSV loads the piece-template UID, the property rows (name plus example value), and the controls. Nominal comes from Measured Value; offset 0, std. dev. 0.1, trend 0, mode Gaussian. UTF-8, UTF-16 LE, and UTF-16 BE (with a BOM, or without one for Latin text). The import replaces the current properties and controls. Add more rows afterwards. A real UTF-16 LE export is at `examples/oede-milkyway-combinator.csv`.
-3. **Run** (pinned while scrolling; use Pin to release it): piece-name base, start index, year, ISO week, workdays (1–7), part count, ZIP file name. The UID field is filled from `PIECE TEMPLATE DATALOOP UID` on CSV import.
+3. **Run** (pinned while scrolling; use Pin to release it): piece base, year, ISO week, workdays (1–7), part count, ZIP file name. The UID field is filled from `PIECE TEMPLATE DATALOOP UID` on CSV import. Trailing digits in the piece base are the first piece number and the zero-padding width: `Piece_000001` with 100 parts is `Piece_000001` … `Piece_000100`. If the number needs more digits than that width, it grows. With no trailing digits, names run `piece_1` … `piece_100`. The CSV file name and the `Piece name` field are that same string. Older configs may still contain `start_index`; it is ignored.
 4. **Properties:** name plus a value pool. Comma-separated entries are picked at random per part. A single value with no comma stays fixed. An empty pool stays empty.
 5. **Controls:** object, control, nominal, offset, std. dev., trend start/end, mode, optional Only >0. Add rows or delete the selection. The eye opens the SPC preview for that control only.
 6. **Noise for all / selection:** write offset, std. dev., trend, mode, and Only >0 onto every control or only the checked rows.
@@ -36,14 +36,14 @@ Someone with admin rights turns Pages on once: **Settings → Pages → Build an
 
 ## CSV schema
 
-Written CSVs: UTF-8, comma separator, CRLF line endings, decimal point. File name `<base><index padded to 4>.csv`, so with the default base `piece_0001.csv`, `piece_0002.csv`, and so on. Import reads those files and also UTF-16 LE/BE, as PolyWorks writes them.
+Written CSVs: UTF-8, comma separator, CRLF line endings, decimal point. The file name is the piece name plus `.csv`. With the default base that is `piece_1.csv`, `piece_2.csv`, and so on. A base of `Piece_000001` keeps six digits until the counter outgrows them. Import reads those files and also UTF-16 LE/BE, as PolyWorks writes them.
 
 ```
 TYPE,PW-Measurements
 VERSION,1.2
 PIECE TEMPLATE DATALOOP UID,<uid>
 [UNTRANSLATABLE PROPERTIES]
-Piece name,piece_0001
+Piece name,piece_1
 Date,<YYYY-MM-DD HH:MM:SS>
 [Properties]
 <property name>,<value>
@@ -56,4 +56,4 @@ Object Name,Control Name,Control Description,Measured Value,Note
 
 CSV import takes `PIECE TEMPLATE DATALOOP UID`, every row under `[Properties]` (name and value; Piece name and Date from `[UNTRANSLATABLE PROPERTIES]` stay out), and under `[Controls]` the object name, control name, and Measured Value as the nominal. The page’s properties and controls are replaced. Offset, std. dev., trend, and mode start at 0 / 0.1 / 0 / Gaussian.
 
-Config JSON uses `uid`, `piece_base`, `start_index`, `year`, `week`, `num_days`, `num_parts`, `zip_name`, `properties` (pairs), `controls` (object, control, nominal, offset, std. dev., trend start, trend end, `"True"`/`"False"`, mode), `rules`, and `noise_ranges` (`offset`, `std`, `trend_start`, `trend_end`, each a min/max pair).
+Config JSON uses `uid`, `piece_base`, `year`, `week`, `num_days`, `num_parts`, `zip_name`, `properties` (pairs), `controls` (object, control, nominal, offset, std. dev., trend start, trend end, `"True"`/`"False"`, mode), `rules`, and `noise_ranges` (`offset`, `std`, `trend_start`, `trend_end`, each a min/max pair). A saved `start_index` from an older file is ignored; the counter is the trailing digits of `piece_base`.

@@ -120,7 +120,7 @@
   .runbar-top h2 { margin: 0; }
   .run-fields {
     display: grid;
-    grid-template-columns: minmax(140px, 1.7fr) minmax(96px, 1.15fr) repeat(5, minmax(68px, 0.75fr)) minmax(108px, 1.05fr);
+    grid-template-columns: minmax(140px, 1.6fr) minmax(150px, 1.45fr) repeat(4, minmax(68px, 0.72fr)) minmax(108px, 1fr);
     gap: 8px;
     align-items: end;
   }
@@ -241,15 +241,14 @@
     </div>
     <div class="run-fields">
       <label>UID<input id="uid" type="text" autocomplete="off" spellcheck="false"></label>
-      <label>Piece base<input id="pieceBase" type="text" value="piece_" autocomplete="off" title="Piece name base"></label>
-      <label>Start<input id="startIndex" type="number" value="1" step="1" title="Start index"></label>
+      <label>Piece base<input id="pieceBase" type="text" value="piece_" autocomplete="off" title="Trailing digits are the first piece number and the zero-padding width. Piece_000001, or piece_ for piece_1."></label>
       <label>Year<input id="year" type="number" value="2025" step="1"></label>
       <label>Week<input id="week" type="number" value="50" min="1" max="53" step="1" title="ISO week"></label>
       <label>Days<input id="numDays" type="number" value="5" min="1" max="7" step="1" title="Workdays (1–7)"></label>
       <label>Parts<input id="numParts" type="number" value="10" min="1" max="20000" step="1" title="Part count"></label>
       <label>ZIP name<input id="zipName" type="text" value="measurements.zip" autocomplete="off" title="ZIP file name"></label>
     </div>
-    <p class="hint run-hint">Parts span the first N days of the ISO week (Monday 00:00 UTC, even spacing, small jitter). File names: base + 4 digits, for example piece_0001.csv. Generate opens a save dialog in Chrome/Edge, otherwise a download.</p>
+    <p class="hint run-hint">Parts span the first N days of the ISO week (Monday 00:00 UTC, even spacing, small jitter). Trailing digits in Piece base are the first number and the pad width: Piece_000001 for 100 parts is Piece_000001 … Piece_000100. No trailing digits: piece_1 … piece_100. The CSV file and the Piece name field use that same name. Generate opens a save dialog in Chrome/Edge, otherwise a download.</p>
   </section>
 
   <section id="properties">
@@ -925,16 +924,22 @@ function runParams() {
   if (!Number.isFinite(days) || days < 1 || days > 7) throw new Error("Workdays must be between 1 and 7");
   if (!Number.isFinite(num) || num < 1) throw new Error("Part count must be at least 1");
   if (num > 20000) throw new Error("Part count is limited to 20000 per ZIP");
-  const start = parseInt($("startIndex").value, 10);
   return {
     uid: $("uid").value.trim(),
     baseName: $("pieceBase").value.replace(/\s+$/, ""),
-    start: Number.isFinite(start) ? start : 1,
     year,
     week,
     days,
     num
   };
+}
+
+function pieceNameAt(base, offset) {
+  const name = String(base ?? "").replace(/\s+$/, "");
+  const m = /^(.*?)(\d+)$/.exec(name);
+  const n = (m ? parseInt(m[2], 10) : 1) + offset;
+  if (!m) return name + String(n);
+  return m[1] + String(n).padStart(m[2].length, "0");
 }
 
 function buildFiles() {
@@ -950,8 +955,7 @@ function buildFiles() {
   for (let i = 0; i < p.num; i++) {
     const jitter = interval ? (Math.random() - 0.5) * (interval / 2) : 0;
     const t = new Date(weekStart.getTime() + (i * interval + jitter) * 1000);
-    const idx = p.start + i;
-    const piece = p.baseName + String(idx).padStart(4, "0");
+    const piece = pieceNameAt(p.baseName, i);
     const rows = [
       ["TYPE", "PW-Measurements"],
       ["VERSION", "1.2"],
@@ -1088,7 +1092,6 @@ function currentConfig() {
   return {
     uid: $("uid").value,
     piece_base: $("pieceBase").value,
-    start_index: Number($("startIndex").value),
     year: Number($("year").value),
     week: Number($("week").value),
     num_days: Number($("numDays").value),
@@ -1107,7 +1110,6 @@ function loadConfig(cfg) {
   if (cfg.properties && !Array.isArray(cfg.properties)) throw new Error("properties must be a list");
   $("uid").value = cfg.uid || uuid();
   $("pieceBase").value = cfg.piece_base || "piece_";
-  $("startIndex").value = cfg.start_index ?? 1;
   $("year").value = cfg.year ?? 2025;
   $("week").value = cfg.week ?? 50;
   $("numDays").value = cfg.num_days ?? 5;
@@ -1570,6 +1572,7 @@ if (typeof ResizeObserver === "function") {
 
 window.AFP = {
   buildFiles,
+  pieceNameAt,
   makeZip,
   noiseAt,
   measureValue,
