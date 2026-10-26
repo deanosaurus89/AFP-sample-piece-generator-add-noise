@@ -26,9 +26,11 @@ Modi: **Gauß** (normalverteilt), **Sinus** (eine Periode über alle Teile, Ampl
 
 ## GitHub Pages
 
-Die Seite wird aus dem **Wurzelverzeichnis** des Branches **`main`** ausgeliefert (Ordner `/`, nicht `/docs`).
+Quelle ist das **Wurzelverzeichnis** des Branches **`main`** (Ordner `/`, nicht `/docs`). `index.html` liegt auf `main`.
 
 https://deanosaurus89.github.io/AFP-sample-piece-generator-add-noise/
+
+Einmalig muss jemand mit Admin-Recht Pages einschalten: **Settings → Pages → Build and deployment → Source: Deploy from a branch → Branch `main`, Folder `/ (root)` → Save.** Danach veröffentlicht jeder Push auf `main` die Seite. Die Pages-API ließ sich mit dem vorhandenen Token nicht schalten (`pages: write` fehlt, HTTP 403).
 
 ## CSV-Schema
 
