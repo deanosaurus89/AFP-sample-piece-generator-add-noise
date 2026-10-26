@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0f1419">
-<meta name="description" content="AFP Messdaten-Generator: PW-Measurements-CSVs mit Rauschen, Trend, SPC-Vorschau und Property-Regeln.">
+<meta name="description" content="AFP Messdaten-Generator: PolyWorks-CSV als Vorlage (UID, Properties, Controls), Rauschen, Trend und SPC-Vorschau.">
 <title>AFP Messdaten-Generator</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230f1419'/%3E%3Cpath d='M6 22l6-10 5 6 4-5 5 9' fill='none' stroke='%233dbeb6' stroke-width='2'/%3E%3C/svg%3E">
 <style>
@@ -107,6 +107,18 @@
   }
   .row-actions, .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
   header .toolbar { margin-top: 0; justify-content: flex-end; }
+  .import-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+    padding: 22px 18px;
+    border-color: #2c6d68;
+  }
+  .import-hero .lead { margin: 0; font-size: 16px; font-weight: 650; }
+  .import-hero .hint { margin: 0; max-width: 68ch; }
+  button.xl { font-size: 16px; padding: 11px 22px; min-width: 240px; }
   button {
     background: var(--panel-2);
     border: 1px solid var(--line);
@@ -161,11 +173,12 @@
     header .toolbar { justify-content: flex-start; }
     .status { text-align: left; }
     h1 { font-size: 18px; }
+    button.xl { width: 100%; min-width: 0; }
   }
 </style>
 </head>
 <body>
-<a class="skip" href="#lauf">Zum Inhalt</a>
+<a class="skip" href="#template">Zum Inhalt</a>
 <header>
   <div>
     <h1>AFP <span>Messdaten-Generator</span></h1>
@@ -173,14 +186,18 @@
   </div>
   <div>
     <div class="toolbar">
-      <button type="button" id="saveCfg">Config speichern</button>
-      <button type="button" id="loadCfg">Config laden</button>
       <button type="button" class="primary" id="generate">CSVs erzeugen (ZIP)</button>
     </div>
     <p class="status" id="status" role="status" aria-live="polite"></p>
   </div>
 </header>
 <main>
+  <section class="import-hero" id="template">
+    <p class="lead">PolyWorks-CSV als Vorlage laden</p>
+    <button type="button" class="primary xl" id="importCsv">CSV importieren</button>
+    <p class="hint">Übernimmt Piece-Template-UID, Properties und Controls. Nominal kommt aus Measured Value, dazu Offset 0, StdDev 0,1, Trend 0 und Modus Gauß. UTF-8 und UTF-16. Weitere Properties und Controls kannst du danach ergänzen. Der Import ersetzt die bisherigen Properties und Controls; die Regeln bleiben.</p>
+  </section>
+
   <section id="lauf">
     <h2>Lauf</h2>
     <div class="grid">
@@ -263,10 +280,9 @@
     </div>
     <div class="row-actions">
       <button type="button" id="addCtrl">Control hinzufügen</button>
-      <button type="button" id="importCsv">Controls aus CSV</button>
       <button type="button" class="danger" id="delSel">Auswahl löschen</button>
     </div>
-    <p class="hint">CSV-Import hängt Zeilen an. Nominal wird aus „Measured Value“ übernommen, StdDev 0,1, Modus Gauß. „Nur &gt;0“ zieht nichtpositive Ist-Werte in den CSV auf einen kleinen positiven Zufallswert.</p>
+    <p class="hint">Ein geladenes Template setzt Nominal aus „Measured Value“. Offset, StdDev, Trend und Modus lassen sich danach ändern. „Nur &gt;0“ zieht nichtpositive Ist-Werte in den erzeugten CSVs auf einen kleinen positiven Zufallswert.</p>
   </section>
 
   <section id="preview">
@@ -319,16 +335,25 @@
     <div class="row-actions"><button type="button" id="addRule">Regel hinzufügen</button></div>
   </details>
 
+  <details class="panel" id="configPanel">
+    <summary class="h2">Config</summary>
+    <p class="hint">Speichert Lauf, Properties, Controls, Regeln und den ZIP-Namen als JSON und lädt sie wieder. Datei oder Einfügen — beides schreibt dieselben Felder.</p>
+    <div class="row-actions">
+      <button type="button" id="saveCfg">Config speichern</button>
+      <button type="button" id="loadCfg">Config laden</button>
+    </div>
+    <p class="hint" style="margin-top:12px">JSON einfügen, falls der Datei-Dialog nicht verfügbar ist:</p>
+    <textarea id="configPaste" spellcheck="false" placeholder='{"uid":"...","piece_base":"piece_","controls":[],"properties":[],"rules":[]}'></textarea>
+    <div class="row-actions"><button type="button" id="loadPaste">Eingefügte Config laden</button></div>
+  </details>
+
   <details class="panel" id="csvDetails">
-    <summary class="h2">CSV-Vorschau / Config einfügen</summary>
-    <p class="hint">Nach dem Erzeugen steht hier die erste CSV. Config-JSON kannst du auch einfügen, falls der Datei-Dialog nicht verfügbar ist.</p>
+    <summary class="h2">CSV-Vorschau</summary>
+    <p class="hint">Nach dem Erzeugen steht hier die erste CSV.</p>
     <div class="row-actions">
       <button type="button" id="copyCsv">Erste CSV kopieren</button>
     </div>
     <textarea id="csvPreview" readonly spellcheck="false" placeholder="Noch keine CSV erzeugt."></textarea>
-    <p class="hint" style="margin-top:12px">Config-JSON einfügen und laden:</p>
-    <textarea id="configPaste" spellcheck="false" placeholder='{"uid":"...","piece_base":"piece_","controls":[],"properties":[],"rules":[]}'></textarea>
-    <div class="row-actions"><button type="button" id="loadPaste">Eingefügte Config laden</button></div>
   </details>
 </main>
 <footer>Eine Datei, kein Build. Funktioniert per Doppelklick offline und auf GitHub Pages. Schema: TYPE PW-Measurements, VERSION 1.2, Properties, Controls — ohne XYZ/IJK.</footer>
@@ -934,25 +959,97 @@ function loadConfig(cfg) {
   setStatus("Config geladen", "ok");
 }
 
+function stripBom(text) {
+  return text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
+}
+
+function sniffUtf16(bytes) {
+  if (bytes.length < 4 || bytes.length % 2 !== 0) return "";
+  const n = Math.min(bytes.length, 256);
+  let even0 = 0;
+  let odd0 = 0;
+  let pairs = 0;
+  for (let i = 0; i + 1 < n; i += 2) {
+    pairs++;
+    if (bytes[i] === 0) even0++;
+    if (bytes[i + 1] === 0) odd0++;
+  }
+  if (pairs < 8) return "";
+  if (odd0 / pairs > 0.6 && even0 / pairs < 0.2) return "utf-16le";
+  if (even0 / pairs > 0.6 && odd0 / pairs < 0.2) return "utf-16be";
+  return "";
+}
+
+function decodeCsvBytes(buffer) {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  let encoding = "utf-8";
+  if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) encoding = "utf-16le";
+  else if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) encoding = "utf-16be";
+  else {
+    const sniffed = sniffUtf16(bytes);
+    if (sniffed) encoding = sniffed;
+  }
+  return stripBom(new TextDecoder(encoding).decode(bytes));
+}
+
 function importCsvText(text) {
-  let inControls = false;
-  let n = 0;
-  const src = String(text || "").replace(/^\uFEFF/, "");
+  let section = "";
+  let uid = "";
+  let sawProps = false;
+  let sawCtrls = false;
+  const props = [];
+  const ctrls = [];
+  const src = stripBom(String(text || ""));
   for (const line of src.split(/\r?\n/)) {
     if (!line.trim()) continue;
     const row = parseCsvLine(line);
     const head = (row[0] || "").trim();
     if (!head) continue;
-    if (head === "[Controls]") { inControls = true; continue; }
-    if (inControls && head.startsWith("[") && head !== "[Controls]") break;
-    if (inControls && row.length >= 4 && head !== "Object Name") {
-      addCtrl([head, (row[1] || "").trim(), (row[3] || "0").trim(), "0", "0.1", "0", "0", false, "gauss"]);
-      n++;
+    if (head.startsWith("[") && head.endsWith("]")) {
+      section = head;
+      if (head === "[Properties]") sawProps = true;
+      if (head === "[Controls]") sawCtrls = true;
+      continue;
+    }
+    if (!section) {
+      if (head === "PIECE TEMPLATE DATALOOP UID") uid = (row[1] || "").trim();
+      continue;
+    }
+    if (section === "[Properties]") {
+      props.push([head, row.slice(1).join(",").trim()]);
+      continue;
+    }
+    if (section === "[Controls]" && row.length >= 4 && head !== "Object Name") {
+      ctrls.push([head, (row[1] || "").trim(), (row[3] || "0").trim(), "0", "0.1", "0", "0", false, "gauss"]);
     }
   }
+  if (!uid && !sawProps && !sawCtrls) {
+    setStatus("CSV ohne UID, Properties oder Controls", "warn");
+    return 0;
+  }
+  if (uid) $("uid").value = uid;
+  if (sawProps) {
+    $("propTable").querySelector("tbody").replaceChildren();
+    props.forEach((p) => addProp(p[0], p[1]));
+  }
+  if (sawCtrls) {
+    $("ctrlTable").querySelector("tbody").replaceChildren();
+    ctrls.forEach((c) => addCtrl(c));
+    $("selAll").checked = false;
+    $("selAll").indeterminate = false;
+  }
   refreshCtrlSelect();
-  setStatus(n + " Controls importiert", n ? "ok" : "warn");
-  return n;
+  syncDraftFromCtrl(currentPreviewCtrl());
+  previewNoise = null;
+  previewSig = "";
+  drawPreview();
+  const parts = [];
+  if (uid) parts.push("UID");
+  if (sawProps) parts.push(props.length + " Properties");
+  if (sawCtrls) parts.push(ctrls.length + " Controls");
+  const loaded = Boolean(uid) || props.length > 0 || ctrls.length > 0;
+  setStatus("Template geladen: " + parts.join(", "), loaded ? "ok" : "warn");
+  return ctrls.length;
 }
 
 function ensureNoise(c, num) {
@@ -1239,7 +1336,7 @@ $("fileCsv").addEventListener("change", async (e) => {
   const file = e.target.files && e.target.files[0];
   e.target.value = "";
   if (!file) return;
-  try { importCsvText(await file.text()); }
+  try { importCsvText(decodeCsvBytes(await file.arrayBuffer())); }
   catch (err) { setStatus("CSV-Import fehlgeschlagen: " + err.message, "danger"); }
 });
 $("loadPaste").addEventListener("click", () => {
@@ -1331,6 +1428,7 @@ window.AFP = {
   currentConfig,
   loadConfig,
   importCsvText,
+  decodeCsvBytes,
   addCtrl,
   addProp,
   addRule,
