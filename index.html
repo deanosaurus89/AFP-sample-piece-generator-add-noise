@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0f1419">
-<meta name="description" content="AFP Messdaten-Generator: PolyWorks-CSV als Vorlage (UID, Properties, Controls), Rauschen, Trend und SPC-Vorschau.">
-<title>AFP Messdaten-Generator</title>
+<meta name="description" content="AFP measurement generator: import a PolyWorks CSV template, add noise and trend, and preview SPC.">
+<title>AFP Measurement Generator</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230f1419'/%3E%3Cpath d='M6 22l6-10 5 6 4-5 5 9' fill='none' stroke='%233dbeb6' stroke-width='2'/%3E%3C/svg%3E">
 <style>
   :root {
@@ -107,18 +107,50 @@
   }
   .row-actions, .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
   header .toolbar { margin-top: 0; justify-content: flex-end; }
-  .import-hero {
+  .import-bar {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    text-align: center;
-    gap: 10px;
-    padding: 22px 18px;
+    gap: 14px;
+    padding: 8px 12px;
     border-color: #2c6d68;
   }
-  .import-hero .lead { margin: 0; font-size: 16px; font-weight: 650; }
-  .import-hero .hint { margin: 0; max-width: 68ch; }
-  button.xl { font-size: 16px; padding: 11px 22px; min-width: 240px; }
+  .import-bar .hint { margin: 0; flex: 1; min-width: 0; }
+  .import-bar button { flex: 0 0 auto; white-space: nowrap; }
+  .runbar-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+  .runbar-top h2 { margin: 0; }
+  .run-fields {
+    display: grid;
+    grid-template-columns: minmax(140px, 1.7fr) minmax(96px, 1.15fr) repeat(5, minmax(68px, 0.75fr)) minmax(108px, 1.05fr);
+    gap: 8px;
+    align-items: end;
+  }
+  .run-hint { margin: 8px 0 0; }
+  .runbar.pinned {
+    position: sticky;
+    top: var(--header-h, 0px);
+    z-index: 4;
+    box-shadow: 0 10px 18px rgba(0, 0, 0, 0.28);
+  }
+  button.pin { padding: 3px 8px; font-size: 12px; }
+  button.pin.on { border-color: var(--accent); color: var(--accent); }
+  h3 {
+    margin: 14px 0 8px;
+    font-size: 12px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 650;
+  }
+  .range-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .range-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  button.icon.eye { color: var(--muted); }
+  button.icon.eye.on { color: var(--accent); border-color: var(--accent); }
+  tr.previewing td { background: rgba(61, 190, 182, 0.14); }
+  .spc-panel { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .spc-panel[hidden] { display: none; }
+  .spc-head { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .spc-head .hint { margin: 0; color: var(--text); }
+  .spc-head .row-actions { margin-top: 0; }
   button {
     background: var(--panel-2);
     border: 1px solid var(--line);
@@ -167,92 +199,131 @@
     color: var(--muted);
     font-size: 12px;
   }
+  @media (max-width: 1100px) {
+    .run-fields { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .range-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
   @media (max-width: 720px) {
     header { position: static; align-items: stretch; }
     header, main, footer { padding-left: 14px; padding-right: 14px; }
     header .toolbar { justify-content: flex-start; }
     .status { text-align: left; }
     h1 { font-size: 18px; }
-    button.xl { width: 100%; min-width: 0; }
+    .import-bar { align-items: stretch; flex-direction: column; }
+    .run-fields, .range-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 </style>
 </head>
 <body>
-<a class="skip" href="#template">Zum Inhalt</a>
+<a class="skip" href="#template">Skip to content</a>
 <header>
   <div>
-    <h1>AFP <span>Messdaten-Generator</span></h1>
-    <div class="sub">PW-Measurements 1.2 · Nominal + Offset + Rauschen + Trend · SPC-Vorschau · nur Ist-Werte, keine Geometrie</div>
+    <h1>AFP <span>Measurement Generator</span></h1>
+    <div class="sub">PW-Measurements 1.2 · nominal + offset + noise + trend · SPC preview · measured values only, no geometry</div>
   </div>
   <div>
     <div class="toolbar">
-      <button type="button" class="primary" id="generate">CSVs erzeugen (ZIP)</button>
+      <button type="button" class="primary" id="generate">Generate CSVs (ZIP)</button>
     </div>
     <p class="status" id="status" role="status" aria-live="polite"></p>
   </div>
 </header>
 <main>
-  <section class="import-hero" id="template">
-    <p class="lead">PolyWorks-CSV als Vorlage laden</p>
-    <button type="button" class="primary xl" id="importCsv">CSV importieren</button>
-    <p class="hint">Übernimmt Piece-Template-UID, Properties und Controls. Nominal kommt aus Measured Value, dazu Offset 0, StdDev 0,1, Trend 0 und Modus Gauß. UTF-8 und UTF-16. Weitere Properties und Controls kannst du danach ergänzen. Der Import ersetzt die bisherigen Properties und Controls; die Regeln bleiben.</p>
+  <section class="import-bar" id="template">
+    <button type="button" class="primary" id="importCsv">Import CSV</button>
+    <p class="hint">PolyWorks template: piece UID, properties, and controls. Nominal comes from Measured Value (offset 0, std. dev. 0.1, trend 0, Gaussian). UTF-8 and UTF-16. Replaces the current properties and controls; rules stay. Add more rows afterwards.</p>
   </section>
 
-  <section id="lauf">
-    <h2>Lauf</h2>
-    <div class="grid">
-      <label>UID<input id="uid" type="text" autocomplete="off" spellcheck="false"></label>
-      <label>Piece-Name Basis<input id="pieceBase" type="text" value="piece_" autocomplete="off"></label>
-      <label>Startindex<input id="startIndex" type="number" value="1" step="1"></label>
-      <label>Jahr<input id="year" type="number" value="2025" step="1"></label>
-      <label>Kalenderwoche<input id="week" type="number" value="50" min="1" max="53" step="1"></label>
-      <label>Arbeitstage (1–7)<input id="numDays" type="number" value="5" min="1" max="7" step="1"></label>
-      <label>Anzahl Teile<input id="numParts" type="number" value="10" min="1" max="20000" step="1"></label>
-      <label>ZIP-Dateiname<input id="zipName" type="text" value="messdaten.zip" autocomplete="off"></label>
+  <section id="run" class="runbar pinned">
+    <div class="runbar-top">
+      <h2>Run</h2>
+      <button type="button" id="pinRun" class="pin on" aria-pressed="true" title="Keep the run bar visible while scrolling">Pinned</button>
     </div>
-    <p class="hint">Die Teile werden über die ersten N Tage der ISO-Kalenderwoche verteilt (Montag 00:00 UTC, gleichmäßiger Abstand, kleiner Jitter). Dateinamen: Basis + Index auf 4 Stellen, z. B. piece_0001.csv. Beim Erzeugen öffnet sich der Speichern-Dialog (Chrome/Edge) oder ein Download.</p>
+    <div class="run-fields">
+      <label>UID<input id="uid" type="text" autocomplete="off" spellcheck="false"></label>
+      <label>Piece base<input id="pieceBase" type="text" value="piece_" autocomplete="off" title="Piece name base"></label>
+      <label>Start<input id="startIndex" type="number" value="1" step="1" title="Start index"></label>
+      <label>Year<input id="year" type="number" value="2025" step="1"></label>
+      <label>Week<input id="week" type="number" value="50" min="1" max="53" step="1" title="ISO week"></label>
+      <label>Days<input id="numDays" type="number" value="5" min="1" max="7" step="1" title="Workdays (1–7)"></label>
+      <label>Parts<input id="numParts" type="number" value="10" min="1" max="20000" step="1" title="Part count"></label>
+      <label>ZIP name<input id="zipName" type="text" value="measurements.zip" autocomplete="off" title="ZIP file name"></label>
+    </div>
+    <p class="hint run-hint">Parts span the first N days of the ISO week (Monday 00:00 UTC, even spacing, small jitter). File names: base + 4 digits, for example piece_0001.csv. Generate opens a save dialog in Chrome/Edge, otherwise a download.</p>
   </section>
 
   <section id="properties">
     <h2>Properties</h2>
-    <p class="hint">Kommagetrennte Werte: pro Teil wird zufällig einer gewählt. Leer = leer. Ein Komma trennt den Pool, es ist kein Dezimaltrennzeichen.</p>
+    <p class="hint">Comma-separated values: one is picked at random for each part. Empty stays empty. A comma splits the pool; it is not a decimal mark.</p>
     <div class="scroll">
       <table id="propTable">
-        <thead><tr><th>Name</th><th>Werte</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Values</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
-    <div class="row-actions"><button type="button" id="addProp">Property hinzufügen</button></div>
+    <div class="row-actions"><button type="button" id="addProp">Add property</button></div>
   </section>
 
   <section id="noise">
-    <h2>Rauschen für alle / Auswahl</h2>
-    <p class="hint">Ist = Nominal + Offset + Rauschen(Modus, StdDev) + Trend von Start nach Ende, plus passende Advanced-Regeln. Offset = konstanter Versatz. StdDev = Amplitude (bei Gauß die Standardabweichung). Trend = lineare Drift über die Teile.</p>
-    <p class="hint">Modi: Gauß (normalverteilt), Sinus (eine Periode über alle Teile), Zickzack (+/− StdDev im Wechsel), Ausreißer (meist Gauß, etwa 5&nbsp;% der Teile mit 4–6× StdDev).</p>
+    <h2>Noise for all / selection</h2>
+    <p class="hint">Measured = nominal + offset + noise(mode, std. dev.) + trend from start to end, plus matching advanced rules. Offset is a constant shift. Std. dev. is the amplitude (for Gaussian, the standard deviation). Trend is a linear drift across the parts.</p>
+    <p class="hint">Modes: Gaussian (normal), Sine (one period across all parts), Zigzag (alternating +/− std. dev.), Outliers (mostly Gaussian, about 5% of parts at 4–6× std. dev.).</p>
     <div class="grid">
       <label>Offset<input id="gOffset" type="number" step="any" value="0"></label>
-      <label>StdDev<input id="gStd" type="number" step="any" value="0.1"></label>
-      <label>Trend Start<input id="gT0" type="number" step="any" value="0"></label>
-      <label>Trend Ende<input id="gT1" type="number" step="any" value="0"></label>
-      <label>Nur positiv
+      <label>Std. dev.<input id="gStd" type="number" step="any" value="0.1"></label>
+      <label>Trend start<input id="gT0" type="number" step="any" value="0"></label>
+      <label>Trend end<input id="gT1" type="number" step="any" value="0"></label>
+      <label>Only &gt;0
         <select id="gPos">
-          <option value="keep">nicht ändern</option>
-          <option value="true">ja</option>
-          <option value="false">nein</option>
+          <option value="keep">leave unchanged</option>
+          <option value="true">yes</option>
+          <option value="false">no</option>
         </select>
       </label>
-      <label>Modus
+      <label>Mode
         <select id="gMode">
-          <option value="gauss">Gauß</option>
-          <option value="sine">Sinus</option>
-          <option value="zigzag">Zickzack</option>
-          <option value="outliers">Ausreißer</option>
+          <option value="gauss">Gaussian</option>
+          <option value="sine">Sine</option>
+          <option value="zigzag">Zigzag</option>
+          <option value="outliers">Outliers</option>
         </select>
       </label>
     </div>
     <div class="row-actions">
-      <button type="button" class="warn" id="applyAll">Auf alle Controls übernehmen</button>
-      <button type="button" class="warn" id="applySel">Auf Auswahl übernehmen</button>
+      <button type="button" class="warn" id="applyAll">Apply to all controls</button>
+      <button type="button" class="warn" id="applySel">Apply to selection</button>
+    </div>
+    <h3>Randomize</h3>
+    <p class="hint">Fills offset, std. dev., trend start, trend end, and mode at random. Only &gt;0 stays as it is. Numbers stay inside the min/max you set. Defaults: offset ±0.5, std. dev. 0.05–0.5, trend ±0.3.</p>
+    <div class="range-grid">
+      <div>
+        <div class="range-pair">
+          <label>Offset min<input id="rOffMin" type="number" step="any" value="-0.5"></label>
+          <label>Offset max<input id="rOffMax" type="number" step="any" value="0.5"></label>
+        </div>
+      </div>
+      <div>
+        <div class="range-pair">
+          <label>Std. dev. min<input id="rStdMin" type="number" step="any" value="0.05"></label>
+          <label>Std. dev. max<input id="rStdMax" type="number" step="any" value="0.5"></label>
+        </div>
+      </div>
+      <div>
+        <div class="range-pair">
+          <label>Trend start min<input id="rT0Min" type="number" step="any" value="-0.3"></label>
+          <label>Trend start max<input id="rT0Max" type="number" step="any" value="0.3"></label>
+        </div>
+      </div>
+      <div>
+        <div class="range-pair">
+          <label>Trend end min<input id="rT1Min" type="number" step="any" value="-0.3"></label>
+          <label>Trend end max<input id="rT1Max" type="number" step="any" value="0.3"></label>
+        </div>
+      </div>
+    </div>
+    <div class="row-actions">
+      <button type="button" class="warn" id="randAll">Randomize all</button>
+      <button type="button" class="warn" id="randSel">Randomize selection</button>
     </div>
   </section>
 
@@ -262,68 +333,61 @@
       <table id="ctrlTable">
         <thead>
           <tr>
-            <th class="checkcol"><input type="checkbox" id="selAll" title="Alle"></th>
-            <th>Objekt</th>
+            <th class="checkcol"><input type="checkbox" id="selAll" title="All"></th>
+            <th class="checkcol" title="SPC preview">SPC</th>
+            <th>Object</th>
             <th>Control</th>
             <th class="narrow">Nominal</th>
             <th class="narrow">Offset</th>
-            <th class="narrow">StdDev</th>
-            <th class="narrow">Trend Start</th>
-            <th class="narrow">Trend Ende</th>
-            <th class="mode">Modus</th>
-            <th>Nur &gt;0</th>
+            <th class="narrow">Std. dev.</th>
+            <th class="narrow">Trend start</th>
+            <th class="narrow">Trend end</th>
+            <th class="mode">Mode</th>
+            <th>Only &gt;0</th>
             <th></th>
           </tr>
         </thead>
         <tbody></tbody>
       </table>
     </div>
+    <div id="spcPanel" class="spc-panel" hidden>
+      <div class="spc-head">
+        <p class="hint" id="chartTitle"></p>
+        <div class="row-actions">
+          <button type="button" class="primary" id="reroll">Reroll preview</button>
+          <button type="button" id="closeSpc">Close</button>
+        </div>
+      </div>
+      <p class="hint">Simulated measured values for this control across the part count. The chart reads offset, std. dev., trend, and mode from the row. Advanced rules are omitted here and apply when generating CSVs. Only &gt;0 is stable in the preview (+0.01) and random between 0.001 and 0.05 in the CSVs.</p>
+      <div class="chart-wrap" id="chartWrap">
+        <canvas id="chart" width="900" height="280" aria-label="SPC chart of measured values"></canvas>
+      </div>
+      <div class="legend" id="legend">
+        <span><i style="background:#3dbeb6"></i>Measured</span>
+        <span><i class="dashed"></i>Nominal (dashed)</span>
+        <span><i style="background:#e8a54b"></i>Mean (N+offset)</span>
+        <span><i style="background:#7dcea0"></i>Trend</span>
+      </div>
+      <p class="hint" id="chartStats"></p>
+      <p class="hint" id="chartReadout"></p>
+    </div>
     <div class="row-actions">
-      <button type="button" id="addCtrl">Control hinzufügen</button>
-      <button type="button" class="danger" id="delSel">Auswahl löschen</button>
+      <button type="button" id="addCtrl">Add control</button>
+      <button type="button" class="danger" id="delSel">Delete selection</button>
     </div>
-    <p class="hint">Ein geladenes Template setzt Nominal aus „Measured Value“. Offset, StdDev, Trend und Modus lassen sich danach ändern. „Nur &gt;0“ zieht nichtpositive Ist-Werte in den erzeugten CSVs auf einen kleinen positiven Zufallswert.</p>
-  </section>
-
-  <section id="preview">
-    <h2>SPC-Vorschau</h2>
-    <p class="hint">Simulierte Ist-Werte über die Anzahl Teile. Offset und Trend hier als Entwurf justieren — die Tabelle ändert sich erst mit „Übernehmen“. Die Vorschau enthält kein Advanced-Regel-Offset; die Regeln gelten beim Erzeugen der CSVs. „Nur &gt;0“ ist in der Vorschau stabil (+0,01), in den CSVs zufällig zwischen 0,001 und 0,05.</p>
-    <div class="grid draft">
-      <label>Control
-        <select id="previewCtrl"></select>
-      </label>
-      <label>Offset (Entwurf)<input id="draftOffset" type="number" step="any" value="0"></label>
-      <label>Trend Start<input id="draftT0" type="number" step="any" value="0"></label>
-      <label>Trend Ende<input id="draftT1" type="number" step="any" value="0"></label>
-    </div>
-    <div class="row-actions">
-      <button type="button" class="primary" id="reroll">Vorschau neu würfeln</button>
-      <button type="button" class="warn" id="applyDraft">Übernehmen → Auswahl / aktuelles Control</button>
-    </div>
-    <p class="hint" id="chartTitle"></p>
-    <div class="chart-wrap" id="chartWrap">
-      <canvas id="chart" width="900" height="280" aria-label="SPC-Verlauf der Ist-Werte"></canvas>
-    </div>
-    <div class="legend" id="legend">
-      <span><i style="background:#3dbeb6"></i>Ist-Wert</span>
-      <span><i class="dashed"></i>Nominal (gestrichelt)</span>
-      <span><i style="background:#e8a54b"></i>Mittel (N+Offset)</span>
-      <span><i style="background:#7dcea0"></i>Trend</span>
-    </div>
-    <p class="hint" id="chartStats"></p>
-    <p class="hint" id="chartReadout"></p>
+    <p class="hint">A loaded template sets nominal from Measured Value. The eye opens the SPC preview for that control. Only &gt;0 lifts non-positive measured values in the generated CSVs to a small positive random value.</p>
   </section>
 
   <details class="panel" id="advanced" open>
-    <summary class="h2">Erweitert: Property → Control</summary>
-    <p class="hint">Wenn die Property beim Teil genau diesen Wert hat, kommt ein zusätzlicher Offset auf das Control. Objekt leer = nur der Control-Name muss passen. Beispiel vorbelegt: Device = „Crysta Apex 1“ → circle 1 / Diameter +0,05. Zeile löschen, wenn der Versatz nicht gewünscht ist.</p>
+    <summary class="h2">Advanced: property → control</summary>
+    <p class="hint">When the property on a part equals this value, an extra offset is added to the control. Leave the object empty to match the control name only. Preset: Device = “Crysta Apex 1” → circle 1 / Diameter +0.05. Delete the row if you do not want that shift.</p>
     <div class="scroll">
       <table id="rulesTable">
         <thead>
           <tr>
             <th>Property</th>
-            <th>Wert gleich</th>
-            <th>Objekt (optional)</th>
+            <th>Value equals</th>
+            <th>Object (optional)</th>
             <th>Control</th>
             <th class="narrow">+Offset</th>
             <th></th>
@@ -332,31 +396,31 @@
         <tbody></tbody>
       </table>
     </div>
-    <div class="row-actions"><button type="button" id="addRule">Regel hinzufügen</button></div>
+    <div class="row-actions"><button type="button" id="addRule">Add rule</button></div>
   </details>
 
   <details class="panel" id="configPanel">
     <summary class="h2">Config</summary>
-    <p class="hint">Speichert Lauf, Properties, Controls, Regeln und den ZIP-Namen als JSON und lädt sie wieder. Datei oder Einfügen — beides schreibt dieselben Felder.</p>
+    <p class="hint">Saves and reloads the run, properties, controls, rules, random ranges, and ZIP name as JSON. A file and pasted JSON write the same fields.</p>
     <div class="row-actions">
-      <button type="button" id="saveCfg">Config speichern</button>
-      <button type="button" id="loadCfg">Config laden</button>
+      <button type="button" id="saveCfg">Save config</button>
+      <button type="button" id="loadCfg">Load config</button>
     </div>
-    <p class="hint" style="margin-top:12px">JSON einfügen, falls der Datei-Dialog nicht verfügbar ist:</p>
+    <p class="hint" style="margin-top:12px">Paste JSON if the file dialog is not available:</p>
     <textarea id="configPaste" spellcheck="false" placeholder='{"uid":"...","piece_base":"piece_","controls":[],"properties":[],"rules":[]}'></textarea>
-    <div class="row-actions"><button type="button" id="loadPaste">Eingefügte Config laden</button></div>
+    <div class="row-actions"><button type="button" id="loadPaste">Load pasted config</button></div>
   </details>
 
   <details class="panel" id="csvDetails">
-    <summary class="h2">CSV-Vorschau</summary>
-    <p class="hint">Nach dem Erzeugen steht hier die erste CSV.</p>
+    <summary class="h2">CSV preview</summary>
+    <p class="hint">After generating, the first CSV appears here.</p>
     <div class="row-actions">
-      <button type="button" id="copyCsv">Erste CSV kopieren</button>
+      <button type="button" id="copyCsv">Copy first CSV</button>
     </div>
-    <textarea id="csvPreview" readonly spellcheck="false" placeholder="Noch keine CSV erzeugt."></textarea>
+    <textarea id="csvPreview" readonly spellcheck="false" placeholder="No CSV generated yet."></textarea>
   </details>
 </main>
-<footer>Eine Datei, kein Build. Funktioniert per Doppelklick offline und auf GitHub Pages. Schema: TYPE PW-Measurements, VERSION 1.2, Properties, Controls — ohne XYZ/IJK.</footer>
+<footer>One file, no build. Works offline by double-click and on GitHub Pages. Schema: TYPE PW-Measurements, VERSION 1.2, properties, controls — no XYZ/IJK.</footer>
 <input type="file" id="fileCfg" accept=".json,application/json" hidden>
 <input type="file" id="fileCsv" accept=".csv,text/csv,text/plain" hidden>
 <script>
@@ -418,10 +482,10 @@ function parsePos(v) {
 }
 
 function modeLabel(mode) {
-  if (mode === "sine") return "Sinus";
-  if (mode === "zigzag") return "Zickzack";
-  if (mode === "outliers") return "Ausreißer";
-  return "Gauß";
+  if (mode === "sine") return "Sine";
+  if (mode === "zigzag") return "Zigzag";
+  if (mode === "outliers") return "Outliers";
+  return "Gaussian";
 }
 
 function setStatus(msg, tone) {
@@ -444,15 +508,33 @@ function iconButton(label, onClick) {
   b.type = "button";
   b.textContent = label;
   b.className = "danger icon";
-  b.title = "Entfernen";
+  b.title = "Remove";
   b.addEventListener("click", onClick);
+  return b;
+}
+
+function eyeButton(tr) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "icon eye";
+  b.title = "SPC preview";
+  b.setAttribute("aria-label", "SPC preview");
+  b.setAttribute("aria-pressed", "false");
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("width", "16");
+  svg.setAttribute("height", "16");
+  svg.setAttribute("aria-hidden", "true");
+  svg.innerHTML = '<path fill="none" stroke="currentColor" stroke-width="2" d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="2.6" fill="currentColor"/>';
+  b.appendChild(svg);
+  b.addEventListener("click", () => togglePreview(tr.dataset.id));
   return b;
 }
 
 function modeSelect(mode) {
   const s = document.createElement("select");
   s.className = "mode";
-  for (const [value, label] of [["gauss", "Gauß"], ["sine", "Sinus"], ["zigzag", "Zickzack"], ["outliers", "Ausreißer"]]) {
+  for (const [value, label] of [["gauss", "Gaussian"], ["sine", "Sine"], ["zigzag", "Zigzag"], ["outliers", "Outliers"]]) {
     const o = document.createElement("option");
     o.value = value;
     o.textContent = label;
@@ -469,7 +551,7 @@ function addProp(name, vals) {
   const tdX = document.createElement("td");
   const nameInput = cellInput(name || "");
   const valInput = cellInput(vals || "");
-  valInput.placeholder = "Wert oder A, B, C";
+  valInput.placeholder = "Value or A, B, C";
   tdN.appendChild(nameInput);
   tdV.appendChild(valInput);
   tdX.appendChild(iconButton("×", () => tr.remove()));
@@ -491,9 +573,11 @@ function addCtrl(row, selected) {
   cb.addEventListener("change", () => {
     tr.classList.toggle("picked", cb.checked);
     syncSelAll();
-    if (cb.checked) focusPreview(tr.dataset.id, true);
   });
   tdC.appendChild(cb);
+  const tdEye = document.createElement("td");
+  tdEye.className = "checkcol";
+  tdEye.appendChild(eyeButton(tr));
   const fields = [];
   for (let i = 0; i < 7; i++) {
     const td = document.createElement("td");
@@ -512,10 +596,15 @@ function addCtrl(row, selected) {
   tdX.appendChild(iconButton("×", () => {
     tr.remove();
     syncSelAll();
-    refreshCtrlSelect();
+    if (tr.dataset.id === previewId) {
+      previewId = null;
+      previewNoise = null;
+      previewSig = "";
+    }
+    syncPreviewState();
     drawPreview();
   }));
-  tr.append(tdC, ...fields, tdM, tdP, tdX);
+  tr.append(tdC, tdEye, ...fields, tdM, tdP, tdX);
   if (selected) tr.classList.add("picked");
   $("ctrlTable").querySelector("tbody").appendChild(tr);
   return tr;
@@ -586,38 +675,60 @@ function syncSelAll() {
   $("selAll").indeterminate = some && !all;
 }
 
-function refreshCtrlSelect() {
-  const sel = $("previewCtrl");
-  const current = sel.value;
-  sel.innerHTML = "";
-  for (const c of readCtrls()) {
-    const opt = document.createElement("option");
-    opt.value = c.id;
-    opt.textContent = (c.obj || "(Objekt)") + " / " + (c.name || "(Control)");
-    sel.appendChild(opt);
-  }
-  if (!sel.options.length) return;
-  const keep = [...sel.options].some((o) => o.value === current);
-  sel.value = keep ? current : sel.options[0].value;
-}
+let previewId = null;
 
 function currentPreviewCtrl() {
-  const id = $("previewCtrl").value;
-  return readCtrls().find((c) => c.id === id) || readCtrls()[0] || null;
+  if (!previewId) return null;
+  return readCtrls().find((c) => c.id === previewId) || null;
 }
 
-function focusPreview(id, syncDraft) {
-  refreshCtrlSelect();
-  if ([...$("previewCtrl").options].some((o) => o.value === id)) $("previewCtrl").value = id;
-  if (syncDraft) syncDraftFromCtrl(currentPreviewCtrl());
+function syncPreviewState() {
+  const rows = [...$("ctrlTable").querySelectorAll("tbody tr")];
+  if (previewId && !rows.some((tr) => tr.dataset.id === previewId)) previewId = null;
+  const open = Boolean(previewId);
+  $("spcPanel").hidden = !open;
+  for (const tr of rows) {
+    const on = open && tr.dataset.id === previewId;
+    tr.classList.toggle("previewing", on);
+    const eye = tr.querySelector(".eye");
+    if (!eye) continue;
+    eye.classList.toggle("on", on);
+    eye.setAttribute("aria-pressed", on ? "true" : "false");
+  }
+}
+
+function togglePreview(id) {
+  if (previewId === id) previewId = null;
+  else {
+    previewId = id;
+    previewNoise = null;
+    previewSig = "";
+  }
+  syncPreviewState();
   drawPreview();
+  if (previewId) $("spcPanel").scrollIntoView({ block: "nearest" });
 }
 
-function syncDraftFromCtrl(c) {
-  if (!c) return;
-  $("draftOffset").value = c.offset;
-  $("draftT0").value = c.t0;
-  $("draftT1").value = c.t1;
+function ctrlTexts(tr) {
+  return [...tr.querySelectorAll("input")].filter((el) => el.type !== "checkbox");
+}
+
+const DEFAULT_RANGES = {
+  offset: [-0.5, 0.5],
+  std: [0.05, 0.5],
+  trend_start: [-0.3, 0.3],
+  trend_end: [-0.3, 0.3]
+};
+
+function readRange(minId, maxId) {
+  const a = parseFloat($(minId).value);
+  const b = parseFloat($(maxId).value);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) throw new Error("Random ranges must be numbers");
+  return a <= b ? [a, b] : [b, a];
+}
+
+function randBetween(min, max) {
+  return fmt(min + Math.random() * (max - min));
 }
 
 function applyNoise(onlySelected) {
@@ -631,7 +742,7 @@ function applyNoise(onlySelected) {
   for (const tr of $("ctrlTable").querySelectorAll("tbody tr")) {
     const c = readCtrl(tr);
     if (onlySelected && !c.sel) continue;
-    const texts = [...tr.querySelectorAll("input")].filter((el) => el.type !== "checkbox");
+    const texts = ctrlTexts(tr);
     texts[3].value = off;
     texts[4].value = std;
     texts[5].value = t0;
@@ -641,8 +752,68 @@ function applyNoise(onlySelected) {
     if (pos === "false") tr.querySelector(".pos").checked = false;
     n++;
   }
-  setStatus(n + " Controls aktualisiert", "ok");
+  if (onlySelected && !n) setStatus("Nothing selected", "warn");
+  else setStatus(n + (n === 1 ? " control updated" : " controls updated"), "ok");
   drawPreview();
+}
+
+function randomizeNoise(onlySelected) {
+  let off;
+  let std;
+  let t0;
+  let t1;
+  try {
+    off = readRange("rOffMin", "rOffMax");
+    std = readRange("rStdMin", "rStdMax");
+    t0 = readRange("rT0Min", "rT0Max");
+    t1 = readRange("rT1Min", "rT1Max");
+  } catch (err) {
+    setStatus(err.message, "danger");
+    return 0;
+  }
+  const modes = ["gauss", "sine", "zigzag", "outliers"];
+  let n = 0;
+  for (const tr of $("ctrlTable").querySelectorAll("tbody tr")) {
+    if (onlySelected && !tr.querySelector(".sel").checked) continue;
+    const texts = ctrlTexts(tr);
+    texts[3].value = randBetween(off[0], off[1]);
+    texts[4].value = randBetween(std[0], std[1]);
+    texts[5].value = randBetween(t0[0], t0[1]);
+    texts[6].value = randBetween(t1[0], t1[1]);
+    tr.querySelector("select.mode").value = modes[Math.floor(Math.random() * modes.length)];
+    n++;
+  }
+  previewNoise = null;
+  previewSig = "";
+  if (onlySelected && !n) setStatus("Nothing selected", "warn");
+  else setStatus(n + (n === 1 ? " control randomized" : " controls randomized"), "ok");
+  drawPreview();
+  return n;
+}
+
+function readNoiseRanges() {
+  return {
+    offset: [Number($("rOffMin").value), Number($("rOffMax").value)],
+    std: [Number($("rStdMin").value), Number($("rStdMax").value)],
+    trend_start: [Number($("rT0Min").value), Number($("rT0Max").value)],
+    trend_end: [Number($("rT1Min").value), Number($("rT1Max").value)]
+  };
+}
+
+function applyNoiseRanges(ranges) {
+  if (!ranges || typeof ranges !== "object") return;
+  const pairs = [
+    ["offset", "rOffMin", "rOffMax", DEFAULT_RANGES.offset],
+    ["std", "rStdMin", "rStdMax", DEFAULT_RANGES.std],
+    ["trend_start", "rT0Min", "rT0Max", DEFAULT_RANGES.trend_start],
+    ["trend_end", "rT1Min", "rT1Max", DEFAULT_RANGES.trend_end]
+  ];
+  for (const [key, minId, maxId, fallback] of pairs) {
+    const pair = Array.isArray(ranges[key]) && ranges[key].length >= 2 ? ranges[key] : fallback;
+    if (!Number.isFinite(Number(pair[0])) || !Number.isFinite(Number(pair[1]))) continue;
+    $(minId).value = pair[0];
+    $(maxId).value = pair[1];
+  }
 }
 
 function gauss() {
@@ -749,11 +920,11 @@ function runParams() {
   const week = parseInt($("week").value, 10);
   const days = parseInt($("numDays").value, 10);
   const num = parseInt($("numParts").value, 10);
-  if (!Number.isFinite(year) || year < 1970 || year > 9999) throw new Error("Jahr ungültig");
-  if (!Number.isFinite(week) || week < 1 || week > 53) throw new Error("Kalenderwoche ungültig");
-  if (!Number.isFinite(days) || days < 1 || days > 7) throw new Error("Arbeitstage müssen zwischen 1 und 7 liegen");
-  if (!Number.isFinite(num) || num < 1) throw new Error("Anzahl Teile muss mindestens 1 sein");
-  if (num > 20000) throw new Error("Anzahl Teile ist auf 20000 pro ZIP begrenzt");
+  if (!Number.isFinite(year) || year < 1970 || year > 9999) throw new Error("Year is invalid");
+  if (!Number.isFinite(week) || week < 1 || week > 53) throw new Error("ISO week is invalid");
+  if (!Number.isFinite(days) || days < 1 || days > 7) throw new Error("Workdays must be between 1 and 7");
+  if (!Number.isFinite(num) || num < 1) throw new Error("Part count must be at least 1");
+  if (num > 20000) throw new Error("Part count is limited to 20000 per ZIP");
   const start = parseInt($("startIndex").value, 10);
   return {
     uid: $("uid").value.trim(),
@@ -820,11 +991,11 @@ function assertSchema(text) {
     [6, (s) => s === "[Properties]", "Properties"]
   ];
   for (const [i, ok, label] of expect) {
-    if (!ok(lines[i] || "")) throw new Error("CSV-Schema abweichend bei " + label);
+    if (!ok(lines[i] || "")) throw new Error("CSV schema mismatch at " + label);
   }
   const ci = lines.indexOf("[Controls]");
   if (ci < 0 || lines[ci + 1] !== "Object Name,Control Name,Control Description,Measured Value,Note") {
-    throw new Error("CSV-Schema abweichend bei Controls");
+    throw new Error("CSV schema mismatch at Controls");
   }
 }
 
@@ -878,7 +1049,7 @@ function makeZip(files) {
 }
 
 function zipFileName() {
-  let name = ($("zipName").value || "messdaten.zip").trim();
+  let name = ($("zipName").value || "measurements.zip").trim();
   if (!name.toLowerCase().endsWith(".zip")) name += ".zip";
   return name.replace(/[\\/:*?"<>|]/g, "_");
 }
@@ -899,7 +1070,7 @@ async function saveBlob(blob, name) {
       const handle = await showSaveFilePicker({
         suggestedName: name,
         startIn: "downloads",
-        types: [{ description: "ZIP-Archiv", accept: { "application/zip": [".zip"] } }]
+        types: [{ description: "ZIP archive", accept: { "application/zip": [".zip"] } }]
       });
       const writable = await handle.createWritable();
       await writable.write(blob);
@@ -925,14 +1096,15 @@ function currentConfig() {
     zip_name: $("zipName").value,
     properties: readProps(),
     controls: readCtrls().map((c) => [c.obj, c.name, c.soll, c.offset, c.std, c.t0, c.t1, c.pos ? "True" : "False", c.mode]),
-    rules: readRules()
+    rules: readRules(),
+    noise_ranges: readNoiseRanges()
   };
 }
 
 function loadConfig(cfg) {
-  if (!cfg || typeof cfg !== "object") throw new Error("Config leer");
-  if (cfg.controls && !Array.isArray(cfg.controls)) throw new Error("controls muss eine Liste sein");
-  if (cfg.properties && !Array.isArray(cfg.properties)) throw new Error("properties muss eine Liste sein");
+  if (!cfg || typeof cfg !== "object") throw new Error("Config is empty");
+  if (cfg.controls && !Array.isArray(cfg.controls)) throw new Error("controls must be a list");
+  if (cfg.properties && !Array.isArray(cfg.properties)) throw new Error("properties must be a list");
   $("uid").value = cfg.uid || uuid();
   $("pieceBase").value = cfg.piece_base || "piece_";
   $("startIndex").value = cfg.start_index ?? 1;
@@ -951,12 +1123,13 @@ function loadConfig(cfg) {
   }
   $("selAll").checked = false;
   $("selAll").indeterminate = false;
-  refreshCtrlSelect();
-  syncDraftFromCtrl(currentPreviewCtrl());
+  if (cfg.noise_ranges) applyNoiseRanges(cfg.noise_ranges);
+  previewId = null;
   previewNoise = null;
   previewSig = "";
+  syncPreviewState();
   drawPreview();
-  setStatus("Config geladen", "ok");
+  setStatus("Config loaded", "ok");
 }
 
 function stripBom(text) {
@@ -1024,7 +1197,7 @@ function importCsvText(text) {
     }
   }
   if (!uid && !sawProps && !sawCtrls) {
-    setStatus("CSV ohne UID, Properties oder Controls", "warn");
+    setStatus("CSV has no UID, properties, or controls", "warn");
     return 0;
   }
   if (uid) $("uid").value = uid;
@@ -1038,17 +1211,17 @@ function importCsvText(text) {
     $("selAll").checked = false;
     $("selAll").indeterminate = false;
   }
-  refreshCtrlSelect();
-  syncDraftFromCtrl(currentPreviewCtrl());
+  previewId = null;
   previewNoise = null;
   previewSig = "";
+  syncPreviewState();
   drawPreview();
   const parts = [];
   if (uid) parts.push("UID");
-  if (sawProps) parts.push(props.length + " Properties");
-  if (sawCtrls) parts.push(ctrls.length + " Controls");
+  if (sawProps) parts.push(props.length + (props.length === 1 ? " property" : " properties"));
+  if (sawCtrls) parts.push(ctrls.length + (ctrls.length === 1 ? " control" : " controls"));
   const loaded = Boolean(uid) || props.length > 0 || ctrls.length > 0;
-  setStatus("Template geladen: " + parts.join(", "), loaded ? "ok" : "warn");
+  setStatus("Template loaded: " + parts.join(", "), loaded ? "ok" : "warn");
   return ctrls.length;
 }
 
@@ -1071,9 +1244,9 @@ function previewSeries() {
   if (num > 20000) num = 20000;
   const base = parseFloat(c.soll);
   if (Number.isNaN(base)) return null;
-  const offset = parseFloat($("draftOffset").value) || 0;
-  const t0 = parseFloat($("draftT0").value) || 0;
-  const t1 = parseFloat($("draftT1").value) || 0;
+  const offset = parseFloat(c.offset) || 0;
+  const t0 = parseFloat(c.t0) || 0;
+  const t1 = parseFloat(c.t1) || 0;
   const noise = ensureNoise(c, num);
   const measured = [];
   const nominal = [];
@@ -1100,7 +1273,7 @@ function drawPreview() {
   if (!series) {
     lastLayout = null;
     title.textContent = "";
-    stats.textContent = "Kein numerisches Control für die Vorschau.";
+    stats.textContent = "No numeric control for the preview.";
     readout.textContent = "";
     const ctx = canvas.getContext("2d");
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1139,7 +1312,7 @@ function drawPreview() {
   stats.textContent = "n=" + series.num
     + " · min " + fmt(sampleMin)
     + " · max " + fmt(sampleMax)
-    + " · Stichprobenmittel " + fmt(meanSample)
+    + " · mean " + fmt(meanSample)
     + " · s " + fmt(sd);
 
   const dpr = window.devicePixelRatio || 1;
@@ -1230,28 +1403,6 @@ function nearestIndex(clientX) {
   return best;
 }
 
-function applyDraft() {
-  const ctrls = readCtrls();
-  const selected = ctrls.filter((c) => c.sel);
-  const ids = selected.length ? selected.map((c) => c.id) : ($("previewCtrl").value ? [$("previewCtrl").value] : []);
-  if (!ids.length) {
-    setStatus("Kein Control ausgewählt", "warn");
-    return;
-  }
-  const off = $("draftOffset").value;
-  const t0 = $("draftT0").value;
-  const t1 = $("draftT1").value;
-  for (const tr of $("ctrlTable").querySelectorAll("tbody tr")) {
-    if (!ids.includes(tr.dataset.id)) continue;
-    const texts = [...tr.querySelectorAll("input")].filter((el) => el.type !== "checkbox");
-    texts[3].value = off;
-    texts[5].value = t0;
-    texts[6].value = t1;
-  }
-  setStatus("Offset/Trend auf " + ids.length + " Control(s) übernommen", "ok");
-  drawPreview();
-}
-
 async function onGenerate() {
   const btn = $("generate");
   btn.disabled = true;
@@ -1267,7 +1418,7 @@ async function onGenerate() {
       if (err && err.name === "AbortError") {
         $("csvPreview").value = files[0].text;
         $("csvDetails").open = true;
-        setStatus("Speichern abgebrochen", "muted");
+        setStatus("Save cancelled", "muted");
         return;
       }
       throw err;
@@ -1276,19 +1427,16 @@ async function onGenerate() {
     $("csvDetails").open = true;
     const first = files[0].name;
     const last = files[files.length - 1].name;
-    setStatus(files.length + " CSV-Dateien gespeichert: " + saved + " (" + first + " … " + last + ")", "ok");
+    setStatus(files.length + (files.length === 1 ? " CSV file saved: " : " CSV files saved: ") + saved + " (" + first + " … " + last + ")", "ok");
   } catch (err) {
-    setStatus("Fehler: " + (err && err.message ? err.message : String(err)), "danger");
+    setStatus("Error: " + (err && err.message ? err.message : String(err)), "danger");
   } finally {
     btn.disabled = false;
   }
 }
 
 $("addProp").addEventListener("click", () => addProp("", ""));
-$("addCtrl").addEventListener("click", () => {
-  addCtrl();
-  refreshCtrlSelect();
-});
+$("addCtrl").addEventListener("click", () => addCtrl());
 $("addRule").addEventListener("click", () => addRule({
   propertyName: "Device",
   propertyValue: "",
@@ -1298,6 +1446,15 @@ $("addRule").addEventListener("click", () => addRule({
 }));
 $("applyAll").addEventListener("click", () => applyNoise(false));
 $("applySel").addEventListener("click", () => applyNoise(true));
+$("randAll").addEventListener("click", () => randomizeNoise(false));
+$("randSel").addEventListener("click", () => randomizeNoise(true));
+$("pinRun").addEventListener("click", () => {
+  const on = !$("run").classList.contains("pinned");
+  $("run").classList.toggle("pinned", on);
+  $("pinRun").classList.toggle("on", on);
+  $("pinRun").setAttribute("aria-pressed", on ? "true" : "false");
+  $("pinRun").textContent = on ? "Pinned" : "Pin";
+});
 $("selAll").addEventListener("change", (e) => {
   $("ctrlTable").querySelectorAll("tbody tr").forEach((tr) => {
     tr.querySelector(".sel").checked = e.target.checked;
@@ -1311,17 +1468,16 @@ $("delSel").addEventListener("click", () => {
     if (tr.querySelector(".sel").checked) { tr.remove(); n++; }
   });
   syncSelAll();
-  refreshCtrlSelect();
-  syncDraftFromCtrl(currentPreviewCtrl());
   previewNoise = null;
   previewSig = "";
+  syncPreviewState();
   drawPreview();
-  setStatus(n ? "Auswahl gelöscht" : "Nichts ausgewählt", n ? "ok" : "warn");
+  setStatus(n ? "Selection deleted" : "Nothing selected", n ? "ok" : "warn");
 });
 $("saveCfg").addEventListener("click", () => {
   const blob = new Blob([JSON.stringify(currentConfig(), null, 2)], { type: "application/json" });
   download(blob, "messdaten-config.json");
-  setStatus("Config gespeichert (Download)", "ok");
+  setStatus("Config saved (download)", "ok");
 });
 $("loadCfg").addEventListener("click", () => $("fileCfg").click());
 $("fileCfg").addEventListener("change", async (e) => {
@@ -1329,7 +1485,7 @@ $("fileCfg").addEventListener("change", async (e) => {
   e.target.value = "";
   if (!file) return;
   try { loadConfig(JSON.parse(await file.text())); }
-  catch (err) { setStatus("Config ungültig: " + err.message, "danger"); }
+  catch (err) { setStatus("Invalid config: " + err.message, "danger"); }
 });
 $("importCsv").addEventListener("click", () => $("fileCsv").click());
 $("fileCsv").addEventListener("change", async (e) => {
@@ -1337,22 +1493,22 @@ $("fileCsv").addEventListener("change", async (e) => {
   e.target.value = "";
   if (!file) return;
   try { importCsvText(decodeCsvBytes(await file.arrayBuffer())); }
-  catch (err) { setStatus("CSV-Import fehlgeschlagen: " + err.message, "danger"); }
+  catch (err) { setStatus("CSV import failed: " + err.message, "danger"); }
 });
 $("loadPaste").addEventListener("click", () => {
   try { loadConfig(JSON.parse($("configPaste").value)); }
-  catch (err) { setStatus("JSON ungültig: " + err.message, "danger"); }
+  catch (err) { setStatus("Invalid JSON: " + err.message, "danger"); }
 });
 $("copyCsv").addEventListener("click", async () => {
   const text = $("csvPreview").value;
-  if (!text) { setStatus("Noch keine CSV — zuerst erzeugen", "warn"); return; }
+  if (!text) { setStatus("No CSV yet — generate first", "warn"); return; }
   try {
     await navigator.clipboard.writeText(text);
-    setStatus("Erste CSV in die Zwischenablage kopiert", "ok");
+    setStatus("First CSV copied to the clipboard", "ok");
   } catch (err) {
     $("csvPreview").focus();
     $("csvPreview").select();
-    setStatus("Bitte die CSV manuell kopieren", "warn");
+    setStatus("Copy the CSV manually", "warn");
   }
 });
 $("generate").addEventListener("click", onGenerate);
@@ -1361,31 +1517,24 @@ $("reroll").addEventListener("click", () => {
   previewSig = "";
   drawPreview();
   const c = currentPreviewCtrl();
-  setStatus(c ? "Vorschau: " + c.obj + " · " + c.name : "Kein Control für Vorschau", c ? "ok" : "warn");
+  setStatus(c ? "Preview: " + c.obj + " · " + c.name : "No control for the preview", c ? "ok" : "warn");
 });
-$("applyDraft").addEventListener("click", applyDraft);
-$("previewCtrl").addEventListener("change", () => {
-  syncDraftFromCtrl(currentPreviewCtrl());
-  previewNoise = null;
-  previewSig = "";
+$("closeSpc").addEventListener("click", () => {
+  previewId = null;
+  syncPreviewState();
   drawPreview();
 });
-["draftOffset", "draftT0", "draftT1", "numParts"].forEach((id) => {
-  $(id).addEventListener("input", () => drawPreview());
-});
-$("ctrlTable").addEventListener("input", () => {
-  refreshCtrlSelect();
-  drawPreview();
-});
+$("numParts").addEventListener("input", () => drawPreview());
+$("ctrlTable").addEventListener("input", () => drawPreview());
 $("chart").addEventListener("mousemove", (ev) => {
   const i = nearestIndex(ev.clientX);
   if (!lastLayout || i < 0) return;
   const s = lastLayout.series;
-  $("chartReadout").textContent = "Teil " + (i + 1)
-    + " · Ist " + fmt(s.measured[i])
-    + " · Nominal " + fmt(s.nominal[i])
-    + " · Mittel " + fmt(s.mean[i])
-    + " · Trend " + fmt(s.trend[i]);
+  $("chartReadout").textContent = "Part " + (i + 1)
+    + " · measured " + fmt(s.measured[i])
+    + " · nominal " + fmt(s.nominal[i])
+    + " · mean " + fmt(s.mean[i])
+    + " · trend " + fmt(s.trend[i]);
 });
 $("chart").addEventListener("mouseleave", () => { $("chartReadout").textContent = ""; });
 document.addEventListener("wheel", (e) => {
@@ -1403,15 +1552,19 @@ addRule({
   controlName: "Diameter",
   offsetAdd: "0.05"
 });
-refreshCtrlSelect();
-const interesting = readCtrls().find((c) => (parseFloat(c.std) || 0) !== 0);
-if (interesting && [...$("previewCtrl").options].some((o) => o.value === interesting.id)) {
-  $("previewCtrl").value = interesting.id;
+syncPreviewState();
+function syncHeaderOffset() {
+  const header = document.querySelector("header");
+  const sticky = getComputedStyle(header).position === "sticky";
+  document.documentElement.style.setProperty("--header-h", sticky ? header.offsetHeight + "px" : "0px");
 }
-syncDraftFromCtrl(currentPreviewCtrl());
-drawPreview();
+syncHeaderOffset();
 if (typeof ResizeObserver === "function") {
-  const ro = new ResizeObserver(() => drawPreview());
+  const ro = new ResizeObserver(() => {
+    syncHeaderOffset();
+    if (!$("spcPanel").hidden) drawPreview();
+  });
+  ro.observe(document.querySelector("header"));
   ro.observe($("chartWrap"));
 }
 
@@ -1436,6 +1589,8 @@ window.AFP = {
   readProps,
   readRules,
   applyNoise,
+  randomizeNoise,
+  togglePreview,
   gauss,
   parseCsvLine,
   assertSchema,
