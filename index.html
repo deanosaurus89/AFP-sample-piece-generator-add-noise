@@ -1,0 +1,1348 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0f1419">
+<meta name="description" content="AFP Messdaten-Generator: PW-Measurements-CSVs mit Rauschen, Trend, SPC-Vorschau und Property-Regeln.">
+<title>AFP Messdaten-Generator</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230f1419'/%3E%3Cpath d='M6 22l6-10 5 6 4-5 5 9' fill='none' stroke='%233dbeb6' stroke-width='2'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0f1419;
+    --panel: #1a222c;
+    --panel-2: #232d3a;
+    --line: #31404f;
+    --text: #e7eef5;
+    --muted: #8ea0b3;
+    --accent: #3dbeb6;
+    --accent-2: #e8a54b;
+    --danger: #e06c75;
+    --ok: #7dcea0;
+    --warn: #e8a54b;
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: dark; }
+  body {
+    margin: 0;
+    font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .skip {
+    position: absolute;
+    left: -999px;
+    top: 8px;
+    background: var(--accent);
+    color: #06211f;
+    padding: 6px 10px;
+    border-radius: 6px;
+    z-index: 20;
+  }
+  .skip:focus { left: 8px; }
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    padding: 16px 24px 12px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(15, 20, 25, 0.96);
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+  h1 { margin: 0; font-size: 20px; font-weight: 650; }
+  h1 span { color: var(--accent); }
+  .sub { color: var(--muted); margin-top: 4px; font-size: 12px; max-width: 640px; }
+  main {
+    padding: 16px 24px 48px;
+    display: grid;
+    gap: 14px;
+    max-width: 1280px;
+    margin: 0 auto;
+    min-width: 0;
+  }
+  section, details.panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+    min-width: 0;
+    max-width: 100%;
+  }
+  h2, summary.h2 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 650;
+  }
+  summary.h2 { cursor: pointer; }
+  details.panel summary.h2 { margin-bottom: 0; }
+  details.panel[open] summary.h2 { margin-bottom: 10px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .grid.draft { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  input, select, button, textarea { font: inherit; color: var(--text); }
+  input[type="text"], input[type="number"], select, textarea {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 7px 8px;
+    width: 100%;
+  }
+  textarea {
+    min-height: 180px;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    resize: vertical;
+  }
+  input:focus, select:focus, textarea:focus, button:focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .row-actions, .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+  header .toolbar { margin-top: 0; justify-content: flex-end; }
+  button {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 7px 12px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: 0.55; cursor: wait; }
+  button.primary { background: var(--accent); color: #06211f; border-color: transparent; font-weight: 650; }
+  button.warn { background: var(--accent-2); color: #2a1c08; border-color: transparent; font-weight: 650; }
+  button.danger { color: var(--danger); }
+  button.icon { width: 32px; padding: 4px 0; line-height: 1; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 720px; }
+  #ctrlTable { min-width: 1040px; }
+  #rulesTable { min-width: 860px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 4px; text-align: left; vertical-align: middle; }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; position: sticky; top: 0; background: var(--panel); z-index: 1; }
+  td input[type="text"], td input[type="number"], td select { padding: 5px 6px; }
+  td input[type="checkbox"] { width: 16px; height: 16px; }
+  tr.picked td { background: rgba(61, 190, 182, 0.08); }
+  .scroll { overflow: auto; max-height: 440px; max-width: 100%; }
+  .hint { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
+  .status { min-height: 18px; margin: 6px 0 0; font-size: 12px; color: var(--ok); text-align: right; }
+  .status.danger { color: var(--danger); }
+  .status.warn { color: var(--warn); }
+  .status.muted { color: var(--muted); }
+  .checkcol { width: 28px; text-align: center; }
+  .narrow { width: 88px; }
+  .mode { width: 118px; }
+  .chart-wrap {
+    position: relative;
+    background: #121920;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  canvas#chart { width: 100%; height: 280px; display: block; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; color: var(--muted); font-size: 12px; }
+  .legend i { display: inline-block; width: 14px; height: 3px; margin-right: 6px; vertical-align: middle; border-radius: 2px; }
+  .legend i.dashed { height: 0; border-top: 2px dashed #8ea0b3; background: transparent; }
+  footer {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 24px 28px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  @media (max-width: 720px) {
+    header { position: static; align-items: stretch; }
+    header, main, footer { padding-left: 14px; padding-right: 14px; }
+    header .toolbar { justify-content: flex-start; }
+    .status { text-align: left; }
+    h1 { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#lauf">Zum Inhalt</a>
+<header>
+  <div>
+    <h1>AFP <span>Messdaten-Generator</span></h1>
+    <div class="sub">PW-Measurements 1.2 · Nominal + Offset + Rauschen + Trend · SPC-Vorschau · nur Ist-Werte, keine Geometrie</div>
+  </div>
+  <div>
+    <div class="toolbar">
+      <button type="button" id="saveCfg">Config speichern</button>
+      <button type="button" id="loadCfg">Config laden</button>
+      <button type="button" class="primary" id="generate">CSVs erzeugen (ZIP)</button>
+    </div>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+  </div>
+</header>
+<main>
+  <section id="lauf">
+    <h2>Lauf</h2>
+    <div class="grid">
+      <label>UID<input id="uid" type="text" autocomplete="off" spellcheck="false"></label>
+      <label>Piece-Name Basis<input id="pieceBase" type="text" value="piece_" autocomplete="off"></label>
+      <label>Startindex<input id="startIndex" type="number" value="1" step="1"></label>
+      <label>Jahr<input id="year" type="number" value="2025" step="1"></label>
+      <label>Kalenderwoche<input id="week" type="number" value="50" min="1" max="53" step="1"></label>
+      <label>Arbeitstage (1–7)<input id="numDays" type="number" value="5" min="1" max="7" step="1"></label>
+      <label>Anzahl Teile<input id="numParts" type="number" value="10" min="1" max="20000" step="1"></label>
+      <label>ZIP-Dateiname<input id="zipName" type="text" value="messdaten.zip" autocomplete="off"></label>
+    </div>
+    <p class="hint">Die Teile werden über die ersten N Tage der ISO-Kalenderwoche verteilt (Montag 00:00 UTC, gleichmäßiger Abstand, kleiner Jitter). Dateinamen: Basis + Index auf 4 Stellen, z. B. piece_0001.csv. Beim Erzeugen öffnet sich der Speichern-Dialog (Chrome/Edge) oder ein Download.</p>
+  </section>
+
+  <section id="properties">
+    <h2>Properties</h2>
+    <p class="hint">Kommagetrennte Werte: pro Teil wird zufällig einer gewählt. Leer = leer. Ein Komma trennt den Pool, es ist kein Dezimaltrennzeichen.</p>
+    <div class="scroll">
+      <table id="propTable">
+        <thead><tr><th>Name</th><th>Werte</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="row-actions"><button type="button" id="addProp">Property hinzufügen</button></div>
+  </section>
+
+  <section id="noise">
+    <h2>Rauschen für alle / Auswahl</h2>
+    <p class="hint">Ist = Nominal + Offset + Rauschen(Modus, StdDev) + Trend von Start nach Ende, plus passende Advanced-Regeln. Offset = konstanter Versatz. StdDev = Amplitude (bei Gauß die Standardabweichung). Trend = lineare Drift über die Teile.</p>
+    <p class="hint">Modi: Gauß (normalverteilt), Sinus (eine Periode über alle Teile), Zickzack (+/− StdDev im Wechsel), Ausreißer (meist Gauß, etwa 5&nbsp;% der Teile mit 4–6× StdDev).</p>
+    <div class="grid">
+      <label>Offset<input id="gOffset" type="number" step="any" value="0"></label>
+      <label>StdDev<input id="gStd" type="number" step="any" value="0.1"></label>
+      <label>Trend Start<input id="gT0" type="number" step="any" value="0"></label>
+      <label>Trend Ende<input id="gT1" type="number" step="any" value="0"></label>
+      <label>Nur positiv
+        <select id="gPos">
+          <option value="keep">nicht ändern</option>
+          <option value="true">ja</option>
+          <option value="false">nein</option>
+        </select>
+      </label>
+      <label>Modus
+        <select id="gMode">
+          <option value="gauss">Gauß</option>
+          <option value="sine">Sinus</option>
+          <option value="zigzag">Zickzack</option>
+          <option value="outliers">Ausreißer</option>
+        </select>
+      </label>
+    </div>
+    <div class="row-actions">
+      <button type="button" class="warn" id="applyAll">Auf alle Controls übernehmen</button>
+      <button type="button" class="warn" id="applySel">Auf Auswahl übernehmen</button>
+    </div>
+  </section>
+
+  <section id="controls">
+    <h2>Controls</h2>
+    <div class="scroll">
+      <table id="ctrlTable">
+        <thead>
+          <tr>
+            <th class="checkcol"><input type="checkbox" id="selAll" title="Alle"></th>
+            <th>Objekt</th>
+            <th>Control</th>
+            <th class="narrow">Nominal</th>
+            <th class="narrow">Offset</th>
+            <th class="narrow">StdDev</th>
+            <th class="narrow">Trend Start</th>
+            <th class="narrow">Trend Ende</th>
+            <th class="mode">Modus</th>
+            <th>Nur &gt;0</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="row-actions">
+      <button type="button" id="addCtrl">Control hinzufügen</button>
+      <button type="button" id="importCsv">Controls aus CSV</button>
+      <button type="button" class="danger" id="delSel">Auswahl löschen</button>
+    </div>
+    <p class="hint">CSV-Import hängt Zeilen an. Nominal wird aus „Measured Value“ übernommen, StdDev 0,1, Modus Gauß. „Nur &gt;0“ zieht nichtpositive Ist-Werte in den CSV auf einen kleinen positiven Zufallswert.</p>
+  </section>
+
+  <section id="preview">
+    <h2>SPC-Vorschau</h2>
+    <p class="hint">Simulierte Ist-Werte über die Anzahl Teile. Offset und Trend hier als Entwurf justieren — die Tabelle ändert sich erst mit „Übernehmen“. Die Vorschau enthält kein Advanced-Regel-Offset; die Regeln gelten beim Erzeugen der CSVs. „Nur &gt;0“ ist in der Vorschau stabil (+0,01), in den CSVs zufällig zwischen 0,001 und 0,05.</p>
+    <div class="grid draft">
+      <label>Control
+        <select id="previewCtrl"></select>
+      </label>
+      <label>Offset (Entwurf)<input id="draftOffset" type="number" step="any" value="0"></label>
+      <label>Trend Start<input id="draftT0" type="number" step="any" value="0"></label>
+      <label>Trend Ende<input id="draftT1" type="number" step="any" value="0"></label>
+    </div>
+    <div class="row-actions">
+      <button type="button" class="primary" id="reroll">Vorschau neu würfeln</button>
+      <button type="button" class="warn" id="applyDraft">Übernehmen → Auswahl / aktuelles Control</button>
+    </div>
+    <p class="hint" id="chartTitle"></p>
+    <div class="chart-wrap" id="chartWrap">
+      <canvas id="chart" width="900" height="280" aria-label="SPC-Verlauf der Ist-Werte"></canvas>
+    </div>
+    <div class="legend" id="legend">
+      <span><i style="background:#3dbeb6"></i>Ist-Wert</span>
+      <span><i class="dashed"></i>Nominal (gestrichelt)</span>
+      <span><i style="background:#e8a54b"></i>Mittel (N+Offset)</span>
+      <span><i style="background:#7dcea0"></i>Trend</span>
+    </div>
+    <p class="hint" id="chartStats"></p>
+    <p class="hint" id="chartReadout"></p>
+  </section>
+
+  <details class="panel" id="advanced" open>
+    <summary class="h2">Erweitert: Property → Control</summary>
+    <p class="hint">Wenn die Property beim Teil genau diesen Wert hat, kommt ein zusätzlicher Offset auf das Control. Objekt leer = nur der Control-Name muss passen. Beispiel vorbelegt: Device = „Crysta Apex 1“ → circle 1 / Diameter +0,05. Zeile löschen, wenn der Versatz nicht gewünscht ist.</p>
+    <div class="scroll">
+      <table id="rulesTable">
+        <thead>
+          <tr>
+            <th>Property</th>
+            <th>Wert gleich</th>
+            <th>Objekt (optional)</th>
+            <th>Control</th>
+            <th class="narrow">+Offset</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="row-actions"><button type="button" id="addRule">Regel hinzufügen</button></div>
+  </details>
+
+  <details class="panel" id="csvDetails">
+    <summary class="h2">CSV-Vorschau / Config einfügen</summary>
+    <p class="hint">Nach dem Erzeugen steht hier die erste CSV. Config-JSON kannst du auch einfügen, falls der Datei-Dialog nicht verfügbar ist.</p>
+    <div class="row-actions">
+      <button type="button" id="copyCsv">Erste CSV kopieren</button>
+    </div>
+    <textarea id="csvPreview" readonly spellcheck="false" placeholder="Noch keine CSV erzeugt."></textarea>
+    <p class="hint" style="margin-top:12px">Config-JSON einfügen und laden:</p>
+    <textarea id="configPaste" spellcheck="false" placeholder='{"uid":"...","piece_base":"piece_","controls":[],"properties":[],"rules":[]}'></textarea>
+    <div class="row-actions"><button type="button" id="loadPaste">Eingefügte Config laden</button></div>
+  </details>
+</main>
+<footer>Eine Datei, kein Build. Funktioniert per Doppelklick offline und auf GitHub Pages. Schema: TYPE PW-Measurements, VERSION 1.2, Properties, Controls — ohne XYZ/IJK.</footer>
+<input type="file" id="fileCfg" accept=".json,application/json" hidden>
+<input type="file" id="fileCsv" accept=".csv,text/csv,text/plain" hidden>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+
+const DEFAULT_PROPS = [
+  ["Serial number", ""],
+  ["Operator name", "Martin"],
+  ["Device", "Crysta Apex 1"],
+  ["Shift", "Night"],
+  ["Lunch", "Pizza"]
+];
+const DEFAULT_CTRLS = [
+  ["circle 1", "Position 1", "0", "0", "0", "0", "0", false],
+  ["circle 1", "Diameter", "7", "0", "0.1", "0", "0", true],
+  ["circle 1", "X", "-30", "0", "0.5", "0", "0", false],
+  ["circle 1", "Z", "-0.4", "0", "0.1", "0", "0", false],
+  ["circle 2", "Position 1", "0", "0", "0", "0", "0", false],
+  ["circle 2", "Diameter", "7", "0", "0.1", "0", "0", true],
+  ["circle 2", "X", "-8", "0", "0.5", "0", "0", false],
+  ["circle 2", "Z", "91", "0", "0.1", "0", "0", false],
+  ["cone 1", "Perpendicularity 1", "0", "0", "0", "0", "0", false],
+  ["cone 2", "Included Angle", "3", "0", "0.1", "0", "0", true],
+  ["plane 1", "Parallelism 1", "0", "0", "0", "0", "0", false],
+  ["datum circle C", "Circularity 1", "0", "0", "0", "0", "0", false],
+  ["datum circle C", "Diameter", "6", "0", "0.1", "0", "0", true],
+  ["datum circle C", "X", "-141", "0", "0.5", "0", "0", false],
+  ["datum circle C", "Z", "58.5", "0", "0.1", "0", "0", false],
+  ["datum circle B", "Circularity 1", "0", "0", "0", "0", "0", false],
+  ["datum circle B", "Diameter", "6", "0", "0.1", "0", "0", true],
+  ["datum circle B", "X", "0", "0", "0.5", "0", "0", false],
+  ["datum circle B", "Z", "0", "0", "0.1", "0", "0", false],
+  ["distance 1", "Z Distance", "91.4", "0", "0.1", "0", "0", false],
+  ["angle 1", "3D Angle 1", "9.69667", "0", "0.1", "0", "0", true],
+  ["datum plane A", "Flatness 1", "0", "0", "0", "0", "0", false]
+];
+
+let previewNoise = null;
+let previewSig = "";
+let lastLayout = null;
+
+function uuid() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    try { return crypto.randomUUID(); } catch (e) { /* file:// */ }
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+function parseMode(v) {
+  return v === "sine" || v === "zigzag" || v === "outliers" || v === "gauss" ? v : "gauss";
+}
+
+function parsePos(v) {
+  return v === true || v === "True" || v === "true" || v === "1";
+}
+
+function modeLabel(mode) {
+  if (mode === "sine") return "Sinus";
+  if (mode === "zigzag") return "Zickzack";
+  if (mode === "outliers") return "Ausreißer";
+  return "Gauß";
+}
+
+function setStatus(msg, tone) {
+  const el = $("status");
+  el.textContent = msg || "";
+  el.className = "status" + (tone && tone !== "ok" ? " " + tone : "");
+}
+
+function cellInput(val, type) {
+  const i = document.createElement("input");
+  i.type = type || "text";
+  i.value = val ?? "";
+  i.autocomplete = "off";
+  if (i.type === "number") i.step = "any";
+  return i;
+}
+
+function iconButton(label, onClick) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = label;
+  b.className = "danger icon";
+  b.title = "Entfernen";
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+function modeSelect(mode) {
+  const s = document.createElement("select");
+  s.className = "mode";
+  for (const [value, label] of [["gauss", "Gauß"], ["sine", "Sinus"], ["zigzag", "Zickzack"], ["outliers", "Ausreißer"]]) {
+    const o = document.createElement("option");
+    o.value = value;
+    o.textContent = label;
+    s.appendChild(o);
+  }
+  s.value = parseMode(mode);
+  return s;
+}
+
+function addProp(name, vals) {
+  const tr = document.createElement("tr");
+  const tdN = document.createElement("td");
+  const tdV = document.createElement("td");
+  const tdX = document.createElement("td");
+  const nameInput = cellInput(name || "");
+  const valInput = cellInput(vals || "");
+  valInput.placeholder = "Wert oder A, B, C";
+  tdN.appendChild(nameInput);
+  tdV.appendChild(valInput);
+  tdX.appendChild(iconButton("×", () => tr.remove()));
+  tr.append(tdN, tdV, tdX);
+  $("propTable").querySelector("tbody").appendChild(tr);
+  return tr;
+}
+
+function addCtrl(row, selected) {
+  const src = row || ["", "", "0", "0", "0", "0", "0", false, "gauss"];
+  const tr = document.createElement("tr");
+  tr.dataset.id = uuid();
+  const tdC = document.createElement("td");
+  tdC.className = "checkcol";
+  const cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.className = "sel";
+  cb.checked = !!selected;
+  cb.addEventListener("change", () => {
+    tr.classList.toggle("picked", cb.checked);
+    syncSelAll();
+    if (cb.checked) focusPreview(tr.dataset.id, true);
+  });
+  tdC.appendChild(cb);
+  const fields = [];
+  for (let i = 0; i < 7; i++) {
+    const td = document.createElement("td");
+    td.appendChild(cellInput(src[i] ?? (i >= 2 ? "0" : ""), i >= 2 ? "number" : "text"));
+    fields.push(td);
+  }
+  const tdM = document.createElement("td");
+  tdM.appendChild(modeSelect(src[8]));
+  const tdP = document.createElement("td");
+  const pos = document.createElement("input");
+  pos.type = "checkbox";
+  pos.className = "pos";
+  pos.checked = parsePos(src[7]);
+  tdP.appendChild(pos);
+  const tdX = document.createElement("td");
+  tdX.appendChild(iconButton("×", () => {
+    tr.remove();
+    syncSelAll();
+    refreshCtrlSelect();
+    drawPreview();
+  }));
+  tr.append(tdC, ...fields, tdM, tdP, tdX);
+  if (selected) tr.classList.add("picked");
+  $("ctrlTable").querySelector("tbody").appendChild(tr);
+  return tr;
+}
+
+function addRule(rule) {
+  const r = rule || { propertyName: "Device", propertyValue: "", objectName: "", controlName: "", offsetAdd: "0.05" };
+  const tr = document.createElement("tr");
+  const keys = ["propertyName", "propertyValue", "objectName", "controlName", "offsetAdd"];
+  for (let i = 0; i < keys.length; i++) {
+    const td = document.createElement("td");
+    td.appendChild(cellInput(r[keys[i]] ?? "", i === 4 ? "number" : "text"));
+    tr.appendChild(td);
+  }
+  const tdX = document.createElement("td");
+  tdX.appendChild(iconButton("×", () => tr.remove()));
+  tr.appendChild(tdX);
+  $("rulesTable").querySelector("tbody").appendChild(tr);
+  return tr;
+}
+
+function readProps() {
+  return [...$("propTable").querySelectorAll("tbody tr")].map((tr) => {
+    const ins = tr.querySelectorAll("input");
+    return [ins[0].value, ins[1].value];
+  });
+}
+
+function readCtrl(tr) {
+  const texts = [...tr.querySelectorAll("input")].filter((el) => el.type !== "checkbox");
+  return {
+    id: tr.dataset.id,
+    sel: tr.querySelector(".sel").checked,
+    obj: texts[0].value,
+    name: texts[1].value,
+    soll: texts[2].value,
+    offset: texts[3].value,
+    std: texts[4].value,
+    t0: texts[5].value,
+    t1: texts[6].value,
+    pos: tr.querySelector(".pos").checked,
+    mode: parseMode(tr.querySelector("select.mode").value)
+  };
+}
+
+function readCtrls() {
+  return [...$("ctrlTable").querySelectorAll("tbody tr")].map(readCtrl);
+}
+
+function readRules() {
+  return [...$("rulesTable").querySelectorAll("tbody tr")].map((tr) => {
+    const ins = [...tr.querySelectorAll("input")];
+    return {
+      propertyName: ins[0].value,
+      propertyValue: ins[1].value,
+      objectName: ins[2].value,
+      controlName: ins[3].value,
+      offsetAdd: ins[4].value
+    };
+  });
+}
+
+function syncSelAll() {
+  const boxes = [...$("ctrlTable").querySelectorAll(".sel")];
+  const all = boxes.length > 0 && boxes.every((b) => b.checked);
+  const some = boxes.some((b) => b.checked);
+  $("selAll").checked = all;
+  $("selAll").indeterminate = some && !all;
+}
+
+function refreshCtrlSelect() {
+  const sel = $("previewCtrl");
+  const current = sel.value;
+  sel.innerHTML = "";
+  for (const c of readCtrls()) {
+    const opt = document.createElement("option");
+    opt.value = c.id;
+    opt.textContent = (c.obj || "(Objekt)") + " / " + (c.name || "(Control)");
+    sel.appendChild(opt);
+  }
+  if (!sel.options.length) return;
+  const keep = [...sel.options].some((o) => o.value === current);
+  sel.value = keep ? current : sel.options[0].value;
+}
+
+function currentPreviewCtrl() {
+  const id = $("previewCtrl").value;
+  return readCtrls().find((c) => c.id === id) || readCtrls()[0] || null;
+}
+
+function focusPreview(id, syncDraft) {
+  refreshCtrlSelect();
+  if ([...$("previewCtrl").options].some((o) => o.value === id)) $("previewCtrl").value = id;
+  if (syncDraft) syncDraftFromCtrl(currentPreviewCtrl());
+  drawPreview();
+}
+
+function syncDraftFromCtrl(c) {
+  if (!c) return;
+  $("draftOffset").value = c.offset;
+  $("draftT0").value = c.t0;
+  $("draftT1").value = c.t1;
+}
+
+function applyNoise(onlySelected) {
+  const off = $("gOffset").value;
+  const std = $("gStd").value;
+  const t0 = $("gT0").value;
+  const t1 = $("gT1").value;
+  const pos = $("gPos").value;
+  const mode = parseMode($("gMode").value);
+  let n = 0;
+  for (const tr of $("ctrlTable").querySelectorAll("tbody tr")) {
+    const c = readCtrl(tr);
+    if (onlySelected && !c.sel) continue;
+    const texts = [...tr.querySelectorAll("input")].filter((el) => el.type !== "checkbox");
+    texts[3].value = off;
+    texts[4].value = std;
+    texts[5].value = t0;
+    texts[6].value = t1;
+    tr.querySelector("select.mode").value = mode;
+    if (pos === "true") tr.querySelector(".pos").checked = true;
+    if (pos === "false") tr.querySelector(".pos").checked = false;
+    n++;
+  }
+  setStatus(n + " Controls aktualisiert", "ok");
+  drawPreview();
+}
+
+function gauss() {
+  let u = 0;
+  let v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+function noiseAt(mode, std, i, num) {
+  if (!std) return 0;
+  const span = Math.max(num - 1, 1);
+  if (mode === "sine") return Math.sin((2 * Math.PI * i) / span) * std;
+  if (mode === "zigzag") return (i % 2 === 0 ? 1 : -1) * std;
+  if (mode === "outliers") {
+    if (Math.random() < 0.05) return gauss() * std * (4 + Math.random() * 2);
+    return gauss() * std;
+  }
+  return gauss() * std;
+}
+
+function fmt(n) {
+  const s = Number(n).toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
+  return s === "-0" ? "0" : s;
+}
+
+function csvEscape(v) {
+  const s = String(v ?? "");
+  if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function toCsv(rows) {
+  return rows.map((r) => r.map(csvEscape).join(",")).join("\r\n") + "\r\n";
+}
+
+function parseCsvLine(line) {
+  const out = [];
+  let cur = "";
+  let q = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (q) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++; }
+        else q = false;
+      } else cur += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === ",") { out.push(cur); cur = ""; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+function isoWeekStart(year, week) {
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const day = jan4.getUTCDay() || 7;
+  const monday = new Date(jan4);
+  monday.setUTCDate(jan4.getUTCDate() - day + 1 + (week - 1) * 7);
+  return monday;
+}
+
+function pad(n) { return String(n).padStart(2, "0"); }
+
+function formatDate(d) {
+  return d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate())
+    + " " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + ":" + pad(d.getUTCSeconds());
+}
+
+function pickPropValue(vals) {
+  if (vals && vals.includes(",")) {
+    const opts = vals.split(",").map((s) => s.trim()).filter(Boolean);
+    if (opts.length) return opts[Math.floor(Math.random() * opts.length)];
+  }
+  return vals;
+}
+
+function measureValue(c, i, num, propMap, rules) {
+  const base = parseFloat(c.soll);
+  if (Number.isNaN(base)) return NaN;
+  const offset = parseFloat(c.offset) || 0;
+  const std = parseFloat(c.std) || 0;
+  const t0 = parseFloat(c.t0) || 0;
+  const t1 = parseFloat(c.t1) || 0;
+  const trend = num > 1 ? t0 + (t1 - t0) * (i / (num - 1)) : t0;
+  let value = base + offset + noiseAt(c.mode, std, i, num) + trend;
+  for (const r of rules) {
+    if (!r.propertyName || !r.controlName) continue;
+    const pv = propMap[r.propertyName];
+    if (pv === undefined) continue;
+    if (String(pv) !== String(r.propertyValue)) continue;
+    if (r.objectName && r.objectName !== c.obj) continue;
+    if (r.controlName !== c.name) continue;
+    value += parseFloat(r.offsetAdd) || 0;
+  }
+  if (c.pos && value <= 0) value = Math.abs(value) + Math.random() * 0.049 + 0.001;
+  return value;
+}
+
+function runParams() {
+  const year = parseInt($("year").value, 10);
+  const week = parseInt($("week").value, 10);
+  const days = parseInt($("numDays").value, 10);
+  const num = parseInt($("numParts").value, 10);
+  if (!Number.isFinite(year) || year < 1970 || year > 9999) throw new Error("Jahr ungültig");
+  if (!Number.isFinite(week) || week < 1 || week > 53) throw new Error("Kalenderwoche ungültig");
+  if (!Number.isFinite(days) || days < 1 || days > 7) throw new Error("Arbeitstage müssen zwischen 1 und 7 liegen");
+  if (!Number.isFinite(num) || num < 1) throw new Error("Anzahl Teile muss mindestens 1 sein");
+  if (num > 20000) throw new Error("Anzahl Teile ist auf 20000 pro ZIP begrenzt");
+  const start = parseInt($("startIndex").value, 10);
+  return {
+    uid: $("uid").value.trim(),
+    baseName: $("pieceBase").value.replace(/\s+$/, ""),
+    start: Number.isFinite(start) ? start : 1,
+    year,
+    week,
+    days,
+    num
+  };
+}
+
+function buildFiles() {
+  const p = runParams();
+  const props = readProps();
+  const ctrls = readCtrls();
+  const rules = readRules();
+  const weekStart = isoWeekStart(p.year, p.week);
+  const total = p.days * 24 * 3600;
+  const interval = p.num > 1 ? total / p.num : 0;
+  const files = [];
+
+  for (let i = 0; i < p.num; i++) {
+    const jitter = interval ? (Math.random() - 0.5) * (interval / 2) : 0;
+    const t = new Date(weekStart.getTime() + (i * interval + jitter) * 1000);
+    const idx = p.start + i;
+    const piece = p.baseName + String(idx).padStart(4, "0");
+    const rows = [
+      ["TYPE", "PW-Measurements"],
+      ["VERSION", "1.2"],
+      ["PIECE TEMPLATE DATALOOP UID", p.uid],
+      ["[UNTRANSLATABLE PROPERTIES]"],
+      ["Piece name", piece],
+      ["Date", formatDate(t)],
+      ["[Properties]"]
+    ];
+    const propMap = {};
+    for (const [name, vals] of props) {
+      const val = pickPropValue(vals);
+      propMap[name] = val;
+      rows.push([name, val]);
+    }
+    rows.push(["[Controls]"]);
+    rows.push(["Object Name", "Control Name", "Control Description", "Measured Value", "Note"]);
+    for (const c of ctrls) {
+      const value = measureValue(c, i, p.num, propMap, rules);
+      const valStr = Number.isNaN(value) ? c.soll : fmt(value);
+      rows.push([c.obj, c.name, "", valStr, ""]);
+    }
+    files.push({ name: piece + ".csv", text: toCsv(rows) });
+  }
+  return files;
+}
+
+function assertSchema(text) {
+  const lines = text.split(/\r\n/);
+  const expect = [
+    [0, (s) => s.startsWith("TYPE,PW-Measurements"), "TYPE"],
+    [1, (s) => s === "VERSION,1.2", "VERSION"],
+    [2, (s) => s.startsWith("PIECE TEMPLATE DATALOOP UID,"), "UID"],
+    [3, (s) => s === "[UNTRANSLATABLE PROPERTIES]", "UNTRANSLATABLE PROPERTIES"],
+    [4, (s) => s.startsWith("Piece name,"), "Piece name"],
+    [5, (s) => s.startsWith("Date,"), "Date"],
+    [6, (s) => s === "[Properties]", "Properties"]
+  ];
+  for (const [i, ok, label] of expect) {
+    if (!ok(lines[i] || "")) throw new Error("CSV-Schema abweichend bei " + label);
+  }
+  const ci = lines.indexOf("[Controls]");
+  if (ci < 0 || lines[ci + 1] !== "Object Name,Control Name,Control Description,Measured Value,Note") {
+    throw new Error("CSV-Schema abweichend bei Controls");
+  }
+}
+
+function crc32(bytes) {
+  let c = ~0;
+  for (let i = 0; i < bytes.length; i++) {
+    c ^= bytes[i];
+    for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+  }
+  return ~c >>> 0;
+}
+
+function strBytes(s) { return new TextEncoder().encode(s); }
+function u16(n) { return [n & 255, (n >> 8) & 255]; }
+function u32(n) { return [n & 255, (n >> 8) & 255, (n >> 16) & 255, (n >> 24) & 255]; }
+function toArrayBuffer(u) {
+  const out = new ArrayBuffer(u.byteLength);
+  new Uint8Array(out).set(u);
+  return out;
+}
+
+function makeZip(files) {
+  const parts = [];
+  const central = [];
+  let offset = 0;
+  for (const f of files) {
+    const name = strBytes(f.name);
+    const data = strBytes(f.text);
+    const crc = crc32(data);
+    const local = new Uint8Array([
+      ...u32(0x04034b50), ...u16(20), ...u16(0), ...u16(0), ...u16(0), ...u16(0),
+      ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(name.length), ...u16(0)
+    ]);
+    parts.push(toArrayBuffer(local), toArrayBuffer(name), toArrayBuffer(data));
+    const cen = new Uint8Array([
+      ...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0), ...u16(0), ...u16(0), ...u16(0),
+      ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(name.length), ...u16(0), ...u16(0),
+      ...u16(0), ...u16(0), ...u32(0), ...u32(offset)
+    ]);
+    central.push(toArrayBuffer(cen), toArrayBuffer(name));
+    offset += local.length + name.length + data.length;
+  }
+  const centralStart = offset;
+  let centralSize = 0;
+  for (const part of central) centralSize += part.byteLength;
+  const end = toArrayBuffer(new Uint8Array([
+    ...u32(0x06054b50), ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length),
+    ...u32(centralSize), ...u32(centralStart), ...u16(0)
+  ]));
+  return new Blob([...parts, ...central, end], { type: "application/zip" });
+}
+
+function zipFileName() {
+  let name = ($("zipName").value || "messdaten.zip").trim();
+  if (!name.toLowerCase().endsWith(".zip")) name += ".zip";
+  return name.replace(/[\\/:*?"<>|]/g, "_");
+}
+
+function download(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+}
+
+async function saveBlob(blob, name) {
+  if (typeof window.showSaveFilePicker === "function") {
+    try {
+      const handle = await showSaveFilePicker({
+        suggestedName: name,
+        startIn: "downloads",
+        types: [{ description: "ZIP-Archiv", accept: { "application/zip": [".zip"] } }]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return handle.name;
+    } catch (err) {
+      if (err && err.name === "AbortError") throw err;
+    }
+  }
+  download(blob, name);
+  return name;
+}
+
+function currentConfig() {
+  return {
+    uid: $("uid").value,
+    piece_base: $("pieceBase").value,
+    start_index: Number($("startIndex").value),
+    year: Number($("year").value),
+    week: Number($("week").value),
+    num_days: Number($("numDays").value),
+    num_parts: Number($("numParts").value),
+    zip_name: $("zipName").value,
+    properties: readProps(),
+    controls: readCtrls().map((c) => [c.obj, c.name, c.soll, c.offset, c.std, c.t0, c.t1, c.pos ? "True" : "False", c.mode]),
+    rules: readRules()
+  };
+}
+
+function loadConfig(cfg) {
+  if (!cfg || typeof cfg !== "object") throw new Error("Config leer");
+  if (cfg.controls && !Array.isArray(cfg.controls)) throw new Error("controls muss eine Liste sein");
+  if (cfg.properties && !Array.isArray(cfg.properties)) throw new Error("properties muss eine Liste sein");
+  $("uid").value = cfg.uid || uuid();
+  $("pieceBase").value = cfg.piece_base || "piece_";
+  $("startIndex").value = cfg.start_index ?? 1;
+  $("year").value = cfg.year ?? 2025;
+  $("week").value = cfg.week ?? 50;
+  $("numDays").value = cfg.num_days ?? 5;
+  $("numParts").value = cfg.num_parts ?? 10;
+  if (cfg.zip_name) $("zipName").value = String(cfg.zip_name);
+  $("propTable").querySelector("tbody").replaceChildren();
+  $("ctrlTable").querySelector("tbody").replaceChildren();
+  (cfg.properties || []).forEach((p) => addProp(p[0], p[1]));
+  (cfg.controls || []).forEach((c) => addCtrl(c));
+  if (Array.isArray(cfg.rules)) {
+    $("rulesTable").querySelector("tbody").replaceChildren();
+    cfg.rules.forEach((r) => addRule(r || {}));
+  }
+  $("selAll").checked = false;
+  $("selAll").indeterminate = false;
+  refreshCtrlSelect();
+  syncDraftFromCtrl(currentPreviewCtrl());
+  previewNoise = null;
+  previewSig = "";
+  drawPreview();
+  setStatus("Config geladen", "ok");
+}
+
+function importCsvText(text) {
+  let inControls = false;
+  let n = 0;
+  const src = String(text || "").replace(/^\uFEFF/, "");
+  for (const line of src.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const row = parseCsvLine(line);
+    const head = (row[0] || "").trim();
+    if (!head) continue;
+    if (head === "[Controls]") { inControls = true; continue; }
+    if (inControls && head.startsWith("[") && head !== "[Controls]") break;
+    if (inControls && row.length >= 4 && head !== "Object Name") {
+      addCtrl([head, (row[1] || "").trim(), (row[3] || "0").trim(), "0", "0.1", "0", "0", false, "gauss"]);
+      n++;
+    }
+  }
+  refreshCtrlSelect();
+  setStatus(n + " Controls importiert", n ? "ok" : "warn");
+  return n;
+}
+
+function ensureNoise(c, num) {
+  const std = parseFloat(c.std) || 0;
+  const sig = [c.id, c.mode, String(std), String(num)].join("|");
+  if (previewNoise && previewSig === sig && previewNoise.length === num) return previewNoise;
+  const arr = [];
+  for (let i = 0; i < num; i++) arr.push(noiseAt(c.mode, std, i, num));
+  previewNoise = arr;
+  previewSig = sig;
+  return arr;
+}
+
+function previewSeries() {
+  const c = currentPreviewCtrl();
+  if (!c) return null;
+  let num = parseInt($("numParts").value, 10);
+  if (!Number.isFinite(num) || num < 1) return null;
+  if (num > 20000) num = 20000;
+  const base = parseFloat(c.soll);
+  if (Number.isNaN(base)) return null;
+  const offset = parseFloat($("draftOffset").value) || 0;
+  const t0 = parseFloat($("draftT0").value) || 0;
+  const t1 = parseFloat($("draftT1").value) || 0;
+  const noise = ensureNoise(c, num);
+  const measured = [];
+  const nominal = [];
+  const mean = [];
+  const trend = [];
+  for (let i = 0; i < num; i++) {
+    const tr = num > 1 ? t0 + (t1 - t0) * (i / (num - 1)) : t0;
+    let value = base + offset + noise[i] + tr;
+    if (c.pos && value <= 0) value = Math.abs(value) + 0.01;
+    measured.push(value);
+    nominal.push(base);
+    mean.push(base + offset);
+    trend.push(base + offset + tr);
+  }
+  return { c, num, measured, nominal, mean, trend, base, offset };
+}
+
+function drawPreview() {
+  const canvas = $("chart");
+  const stats = $("chartStats");
+  const title = $("chartTitle");
+  const readout = $("chartReadout");
+  const series = previewSeries();
+  if (!series) {
+    lastLayout = null;
+    title.textContent = "";
+    stats.textContent = "Kein numerisches Control für die Vorschau.";
+    readout.textContent = "";
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
+  title.textContent = series.c.obj + " · " + series.c.name + " · " + modeLabel(series.c.mode);
+  let minV = Infinity;
+  let maxV = -Infinity;
+  const consider = (arr) => {
+    for (const v of arr) {
+      if (v < minV) minV = v;
+      if (v > maxV) maxV = v;
+    }
+  };
+  consider(series.measured);
+  consider(series.nominal);
+  consider(series.mean);
+  consider(series.trend);
+  if (maxV - minV < 1e-9) { minV -= 0.5; maxV += 0.5; }
+  else {
+    const padY = (maxV - minV) * 0.12;
+    minV -= padY;
+    maxV += padY;
+  }
+  const meanSample = series.measured.reduce((a, b) => a + b, 0) / series.num;
+  let ss = 0;
+  let sampleMin = Infinity;
+  let sampleMax = -Infinity;
+  for (const v of series.measured) {
+    ss += (v - meanSample) * (v - meanSample);
+    if (v < sampleMin) sampleMin = v;
+    if (v > sampleMax) sampleMax = v;
+  }
+  const sd = series.num > 1 ? Math.sqrt(ss / (series.num - 1)) : 0;
+  stats.textContent = "n=" + series.num
+    + " · min " + fmt(sampleMin)
+    + " · max " + fmt(sampleMax)
+    + " · Stichprobenmittel " + fmt(meanSample)
+    + " · s " + fmt(sd);
+
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = Math.max(320, canvas.clientWidth || 900);
+  const cssH = 280;
+  canvas.width = Math.floor(cssW * dpr);
+  canvas.height = Math.floor(cssH * dpr);
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+  const padL = 58;
+  const padR = 12;
+  const padT = 12;
+  const padB = 28;
+  const plotW = cssW - padL - padR;
+  const plotH = cssH - padT - padB;
+  const yAt = (v) => padT + plotH * (1 - (v - minV) / (maxV - minV));
+  const xAt = (i) => series.num === 1 ? padL + plotW / 2 : padL + (plotW * i) / (series.num - 1);
+
+  ctx.fillStyle = "#121920";
+  ctx.fillRect(0, 0, cssW, cssH);
+  ctx.strokeStyle = "#31404f";
+  ctx.fillStyle = "#8ea0b3";
+  ctx.font = "11px Segoe UI, system-ui, sans-serif";
+  ctx.lineWidth = 1;
+  const ticks = 4;
+  for (let t = 0; t <= ticks; t++) {
+    const v = minV + (maxV - minV) * (t / ticks);
+    const y = yAt(v);
+    ctx.beginPath();
+    ctx.moveTo(padL, y);
+    ctx.lineTo(padL + plotW, y);
+    ctx.stroke();
+    ctx.fillText(fmt(v), 4, y + 4);
+  }
+  const labelStep = Math.max(1, Math.ceil(series.num / 8));
+  ctx.textAlign = "center";
+  for (let i = 0; i < series.num; i += labelStep) {
+    ctx.fillText(String(i + 1), xAt(i), cssH - 8);
+  }
+  if ((series.num - 1) % labelStep !== 0) ctx.fillText(String(series.num), xAt(series.num - 1), cssH - 8);
+  ctx.textAlign = "left";
+
+  function stroke(values, color, dashed, width) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(padL, padT, plotW, plotH);
+    ctx.clip();
+    ctx.beginPath();
+    values.forEach((v, i) => {
+      const x = xAt(i);
+      const y = yAt(v);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.setLineDash(dashed ? [5, 4] : []);
+    ctx.stroke();
+    ctx.restore();
+  }
+  stroke(series.nominal, "#8ea0b3", true, 1.5);
+  stroke(series.mean, "#e8a54b", false, 1.5);
+  stroke(series.trend, "#7dcea0", false, 1.5);
+  stroke(series.measured, "#3dbeb6", false, 2);
+  if (series.num <= 40) {
+    ctx.fillStyle = "#3dbeb6";
+    series.measured.forEach((v, i) => {
+      ctx.beginPath();
+      ctx.arc(xAt(i), yAt(v), 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+  lastLayout = { series, padL, plotW, cssW, xAt };
+}
+
+function nearestIndex(clientX) {
+  if (!lastLayout) return -1;
+  const rect = $("chart").getBoundingClientRect();
+  const x = clientX - rect.left;
+  const { series, xAt } = lastLayout;
+  let best = 0;
+  let bestD = Infinity;
+  for (let i = 0; i < series.num; i++) {
+    const d = Math.abs(xAt(i) - x);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+
+function applyDraft() {
+  const ctrls = readCtrls();
+  const selected = ctrls.filter((c) => c.sel);
+  const ids = selected.length ? selected.map((c) => c.id) : ($("previewCtrl").value ? [$("previewCtrl").value] : []);
+  if (!ids.length) {
+    setStatus("Kein Control ausgewählt", "warn");
+    return;
+  }
+  const off = $("draftOffset").value;
+  const t0 = $("draftT0").value;
+  const t1 = $("draftT1").value;
+  for (const tr of $("ctrlTable").querySelectorAll("tbody tr")) {
+    if (!ids.includes(tr.dataset.id)) continue;
+    const texts = [...tr.querySelectorAll("input")].filter((el) => el.type !== "checkbox");
+    texts[3].value = off;
+    texts[5].value = t0;
+    texts[6].value = t1;
+  }
+  setStatus("Offset/Trend auf " + ids.length + " Control(s) übernommen", "ok");
+  drawPreview();
+}
+
+async function onGenerate() {
+  const btn = $("generate");
+  btn.disabled = true;
+  try {
+    const files = buildFiles();
+    assertSchema(files[0].text);
+    const name = zipFileName();
+    const blob = makeZip(files);
+    let saved;
+    try {
+      saved = await saveBlob(blob, name);
+    } catch (err) {
+      if (err && err.name === "AbortError") {
+        $("csvPreview").value = files[0].text;
+        $("csvDetails").open = true;
+        setStatus("Speichern abgebrochen", "muted");
+        return;
+      }
+      throw err;
+    }
+    $("csvPreview").value = files[0].text;
+    $("csvDetails").open = true;
+    const first = files[0].name;
+    const last = files[files.length - 1].name;
+    setStatus(files.length + " CSV-Dateien gespeichert: " + saved + " (" + first + " … " + last + ")", "ok");
+  } catch (err) {
+    setStatus("Fehler: " + (err && err.message ? err.message : String(err)), "danger");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+$("addProp").addEventListener("click", () => addProp("", ""));
+$("addCtrl").addEventListener("click", () => {
+  addCtrl();
+  refreshCtrlSelect();
+});
+$("addRule").addEventListener("click", () => addRule({
+  propertyName: "Device",
+  propertyValue: "",
+  objectName: "",
+  controlName: "",
+  offsetAdd: "0.05"
+}));
+$("applyAll").addEventListener("click", () => applyNoise(false));
+$("applySel").addEventListener("click", () => applyNoise(true));
+$("selAll").addEventListener("change", (e) => {
+  $("ctrlTable").querySelectorAll("tbody tr").forEach((tr) => {
+    tr.querySelector(".sel").checked = e.target.checked;
+    tr.classList.toggle("picked", e.target.checked);
+  });
+  $("selAll").indeterminate = false;
+});
+$("delSel").addEventListener("click", () => {
+  let n = 0;
+  [...$("ctrlTable").querySelectorAll("tbody tr")].forEach((tr) => {
+    if (tr.querySelector(".sel").checked) { tr.remove(); n++; }
+  });
+  syncSelAll();
+  refreshCtrlSelect();
+  syncDraftFromCtrl(currentPreviewCtrl());
+  previewNoise = null;
+  previewSig = "";
+  drawPreview();
+  setStatus(n ? "Auswahl gelöscht" : "Nichts ausgewählt", n ? "ok" : "warn");
+});
+$("saveCfg").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(currentConfig(), null, 2)], { type: "application/json" });
+  download(blob, "messdaten-config.json");
+  setStatus("Config gespeichert (Download)", "ok");
+});
+$("loadCfg").addEventListener("click", () => $("fileCfg").click());
+$("fileCfg").addEventListener("change", async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  try { loadConfig(JSON.parse(await file.text())); }
+  catch (err) { setStatus("Config ungültig: " + err.message, "danger"); }
+});
+$("importCsv").addEventListener("click", () => $("fileCsv").click());
+$("fileCsv").addEventListener("change", async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  try { importCsvText(await file.text()); }
+  catch (err) { setStatus("CSV-Import fehlgeschlagen: " + err.message, "danger"); }
+});
+$("loadPaste").addEventListener("click", () => {
+  try { loadConfig(JSON.parse($("configPaste").value)); }
+  catch (err) { setStatus("JSON ungültig: " + err.message, "danger"); }
+});
+$("copyCsv").addEventListener("click", async () => {
+  const text = $("csvPreview").value;
+  if (!text) { setStatus("Noch keine CSV — zuerst erzeugen", "warn"); return; }
+  try {
+    await navigator.clipboard.writeText(text);
+    setStatus("Erste CSV in die Zwischenablage kopiert", "ok");
+  } catch (err) {
+    $("csvPreview").focus();
+    $("csvPreview").select();
+    setStatus("Bitte die CSV manuell kopieren", "warn");
+  }
+});
+$("generate").addEventListener("click", onGenerate);
+$("reroll").addEventListener("click", () => {
+  previewNoise = null;
+  previewSig = "";
+  drawPreview();
+  const c = currentPreviewCtrl();
+  setStatus(c ? "Vorschau: " + c.obj + " · " + c.name : "Kein Control für Vorschau", c ? "ok" : "warn");
+});
+$("applyDraft").addEventListener("click", applyDraft);
+$("previewCtrl").addEventListener("change", () => {
+  syncDraftFromCtrl(currentPreviewCtrl());
+  previewNoise = null;
+  previewSig = "";
+  drawPreview();
+});
+["draftOffset", "draftT0", "draftT1", "numParts"].forEach((id) => {
+  $(id).addEventListener("input", () => drawPreview());
+});
+$("ctrlTable").addEventListener("input", () => {
+  refreshCtrlSelect();
+  drawPreview();
+});
+$("chart").addEventListener("mousemove", (ev) => {
+  const i = nearestIndex(ev.clientX);
+  if (!lastLayout || i < 0) return;
+  const s = lastLayout.series;
+  $("chartReadout").textContent = "Teil " + (i + 1)
+    + " · Ist " + fmt(s.measured[i])
+    + " · Nominal " + fmt(s.nominal[i])
+    + " · Mittel " + fmt(s.mean[i])
+    + " · Trend " + fmt(s.trend[i]);
+});
+$("chart").addEventListener("mouseleave", () => { $("chartReadout").textContent = ""; });
+document.addEventListener("wheel", (e) => {
+  const t = e.target;
+  if (t && t.tagName === "INPUT" && t.type === "number" && document.activeElement === t) t.blur();
+}, { passive: true });
+
+$("uid").value = uuid();
+DEFAULT_PROPS.forEach((p) => addProp(p[0], p[1]));
+DEFAULT_CTRLS.forEach((c) => addCtrl(c));
+addRule({
+  propertyName: "Device",
+  propertyValue: "Crysta Apex 1",
+  objectName: "circle 1",
+  controlName: "Diameter",
+  offsetAdd: "0.05"
+});
+refreshCtrlSelect();
+const interesting = readCtrls().find((c) => (parseFloat(c.std) || 0) !== 0);
+if (interesting && [...$("previewCtrl").options].some((o) => o.value === interesting.id)) {
+  $("previewCtrl").value = interesting.id;
+}
+syncDraftFromCtrl(currentPreviewCtrl());
+drawPreview();
+if (typeof ResizeObserver === "function") {
+  const ro = new ResizeObserver(() => drawPreview());
+  ro.observe($("chartWrap"));
+}
+
+window.AFP = {
+  buildFiles,
+  makeZip,
+  noiseAt,
+  measureValue,
+  fmt,
+  toCsv,
+  csvEscape,
+  isoWeekStart,
+  formatDate,
+  currentConfig,
+  loadConfig,
+  importCsvText,
+  addCtrl,
+  addProp,
+  addRule,
+  readCtrls,
+  readProps,
+  readRules,
+  applyNoise,
+  gauss,
+  parseCsvLine,
+  assertSchema,
+  pickPropValue
+};
+</script>
+</body>
+</html>
