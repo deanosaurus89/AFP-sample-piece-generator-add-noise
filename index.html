@@ -412,11 +412,12 @@
 
   <details class="panel" id="csvDetails">
     <summary class="h2">CSV preview</summary>
-    <p class="hint">After generating, the first CSV appears here.</p>
+    <p class="hint">Preview first CSV builds the first piece only. It does not create a ZIP. Generate CSVs (ZIP) still writes the full batch.</p>
     <div class="row-actions">
+      <button type="button" id="previewCsv">Preview first CSV</button>
       <button type="button" id="copyCsv">Copy first CSV</button>
     </div>
-    <textarea id="csvPreview" readonly spellcheck="false" placeholder="No CSV generated yet."></textarea>
+    <textarea id="csvPreview" readonly spellcheck="false" placeholder="No CSV yet. Use Preview first CSV."></textarea>
   </details>
 </main>
 <footer>One file, no build. Works offline by double-click and on GitHub Pages. Schema: TYPE PW-Measurements, VERSION 1.2, properties, controls — no XYZ/IJK.</footer>
@@ -1405,6 +1406,28 @@ function nearestIndex(clientX) {
   return best;
 }
 
+function showFirstCsv(files) {
+  $("csvPreview").value = files[0].text;
+  $("csvDetails").open = true;
+}
+
+function previewFirstCsv() {
+  const btn = $("previewCsv");
+  if (btn) btn.disabled = true;
+  try {
+    const files = buildFiles();
+    assertSchema(files[0].text);
+    showFirstCsv(files);
+    setStatus("First CSV preview: " + files[0].name, "ok");
+    return files[0].text;
+  } catch (err) {
+    setStatus("Error: " + (err && err.message ? err.message : String(err)), "danger");
+    return "";
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function onGenerate() {
   const btn = $("generate");
   btn.disabled = true;
@@ -1418,15 +1441,13 @@ async function onGenerate() {
       saved = await saveBlob(blob, name);
     } catch (err) {
       if (err && err.name === "AbortError") {
-        $("csvPreview").value = files[0].text;
-        $("csvDetails").open = true;
+        showFirstCsv(files);
         setStatus("Save cancelled", "muted");
         return;
       }
       throw err;
     }
-    $("csvPreview").value = files[0].text;
-    $("csvDetails").open = true;
+    showFirstCsv(files);
     const first = files[0].name;
     const last = files[files.length - 1].name;
     setStatus(files.length + (files.length === 1 ? " CSV file saved: " : " CSV files saved: ") + saved + " (" + first + " … " + last + ")", "ok");
@@ -1501,9 +1522,10 @@ $("loadPaste").addEventListener("click", () => {
   try { loadConfig(JSON.parse($("configPaste").value)); }
   catch (err) { setStatus("Invalid JSON: " + err.message, "danger"); }
 });
+$("previewCsv").addEventListener("click", () => previewFirstCsv());
 $("copyCsv").addEventListener("click", async () => {
   const text = $("csvPreview").value;
-  if (!text) { setStatus("No CSV yet — generate first", "warn"); return; }
+  if (!text) { setStatus("No CSV yet — use Preview first CSV", "warn"); return; }
   try {
     await navigator.clipboard.writeText(text);
     setStatus("First CSV copied to the clipboard", "ok");
@@ -1573,6 +1595,7 @@ if (typeof ResizeObserver === "function") {
 window.AFP = {
   buildFiles,
   pieceNameAt,
+  previewFirstCsv,
   makeZip,
   noiseAt,
   measureValue,

@@ -16,7 +16,8 @@ The page is a single file (`index.html`, CSS and JavaScript embedded). It runs o
 8. **SPC preview:** opened from a control’s eye. Measured values across the part count, with lines for nominal, mean (nominal+offset), and trend. Reroll draws the random noise again. The chart uses the row values; there is no second set of offset/trend fields.
 9. **Advanced:** when a property on a part has a given value, an extra offset is added to a control. Preset: `Device = Crysta Apex 1` → `circle 1 / Diameter` +0.05. Delete the row if you do not want that shift.
 10. **Config** (collapsed): saves every input as JSON (`messdaten-config.json`) and loads it again, from a file or pasted JSON. Includes `noise_ranges` when you save from this version. Older configs without a mode or without `rules` still load; missing `rules` leave the current rules, missing `noise_ranges` leave the current ranges.
-11. **Generate CSVs (ZIP).** Chrome and Edge open a save dialog; other browsers download the file.
+11. **CSV preview** (collapsed): **Preview first CSV** builds the first piece and shows it in the text area. It does not open a save dialog and does not create a ZIP. **Copy first CSV** copies that text.
+12. **Generate CSVs (ZIP).** Chrome and Edge open a save dialog; other browsers download the file. That still writes the full batch and also refreshes the first-CSV preview.
 
 Parts are placed across the first N days of the chosen ISO week (Monday 00:00 UTC, even spacing, small jitter). N is the Days field. Timestamps are UTC, with no time zone in `Date`.
 
