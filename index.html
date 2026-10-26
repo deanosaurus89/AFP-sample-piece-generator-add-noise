@@ -166,7 +166,12 @@
   button.icon { width: 32px; padding: 4px 0; line-height: 1; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 720px; }
   #ctrlTable { min-width: 1040px; }
-  #rulesTable { min-width: 860px; }
+  .noise-in-controls {
+    margin: 0 0 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .noise-in-controls > h3:first-child { margin-top: 2px; }
   th, td { border-bottom: 1px solid var(--line); padding: 4px; text-align: left; vertical-align: middle; }
   th { color: var(--muted); font-weight: 600; font-size: 11px; position: sticky; top: 0; background: var(--panel); z-index: 1; }
   td input[type="text"], td input[type="number"], td select { padding: 5px 6px; }
@@ -263,9 +268,11 @@
     <div class="row-actions"><button type="button" id="addProp">Add property</button></div>
   </section>
 
-  <section id="noise">
-    <h2>Noise for all / selection</h2>
-    <p class="hint">Measured = nominal + offset + noise(mode, std. dev.) + trend from start to end, plus matching advanced rules. Offset is a constant shift. Std. dev. is the amplitude (for Gaussian, the standard deviation). Trend is a linear drift across the parts.</p>
+  <section id="controls">
+    <h2>Controls</h2>
+    <div id="noise" class="noise-in-controls">
+    <h3>Noise for all / selection</h3>
+    <p class="hint">Measured = nominal + offset + noise(mode, std. dev.) + trend from start to end. Offset is a constant shift. Std. dev. is the amplitude (for Gaussian, the standard deviation). Trend is a linear drift across the parts.</p>
     <p class="hint">Modes: Gaussian (normal), Sine (one period across all parts), Zigzag (alternating +/− std. dev.), Outliers (mostly Gaussian, about 5% of parts at 4–6× std. dev.).</p>
     <div class="grid">
       <label>Offset<input id="gOffset" type="number" step="any" value="0"></label>
@@ -324,10 +331,7 @@
       <button type="button" class="warn" id="randAll">Randomize all</button>
       <button type="button" class="warn" id="randSel">Randomize selection</button>
     </div>
-  </section>
-
-  <section id="controls">
-    <h2>Controls</h2>
+    </div>
     <div class="scroll">
       <table id="ctrlTable">
         <thead>
@@ -357,7 +361,7 @@
           <button type="button" id="closeSpc">Close</button>
         </div>
       </div>
-      <p class="hint">Simulated measured values for this control across the part count. The chart reads offset, std. dev., trend, and mode from the row. Advanced rules are omitted here and apply when generating CSVs. Only &gt;0 is stable in the preview (+0.01) and random between 0.001 and 0.05 in the CSVs.</p>
+      <p class="hint">Simulated measured values for this control across the part count. The chart reads offset, std. dev., trend, and mode from the row. Only &gt;0 is stable in the preview (+0.01) and random between 0.001 and 0.05 in the CSVs.</p>
       <div class="chart-wrap" id="chartWrap">
         <canvas id="chart" width="900" height="280" aria-label="SPC chart of measured values"></canvas>
       </div>
@@ -377,36 +381,15 @@
     <p class="hint">A loaded template sets nominal from Measured Value. The eye opens the SPC preview for that control. Only &gt;0 lifts non-positive measured values in the generated CSVs to a small positive random value.</p>
   </section>
 
-  <details class="panel" id="advanced" open>
-    <summary class="h2">Advanced: property → control</summary>
-    <p class="hint">When the property on a part equals this value, an extra offset is added to the control. Leave the object empty to match the control name only. Preset: Device = “Crysta Apex 1” → circle 1 / Diameter +0.05. Delete the row if you do not want that shift.</p>
-    <div class="scroll">
-      <table id="rulesTable">
-        <thead>
-          <tr>
-            <th>Property</th>
-            <th>Value equals</th>
-            <th>Object (optional)</th>
-            <th>Control</th>
-            <th class="narrow">+Offset</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <div class="row-actions"><button type="button" id="addRule">Add rule</button></div>
-  </details>
-
   <details class="panel" id="configPanel">
     <summary class="h2">Config</summary>
-    <p class="hint">Saves and reloads the run, properties, controls, rules, random ranges, and ZIP name as JSON. A file and pasted JSON write the same fields.</p>
+    <p class="hint">Saves and reloads the run, properties, controls, random ranges, and ZIP name as JSON. A file and pasted JSON write the same fields.</p>
     <div class="row-actions">
       <button type="button" id="saveCfg">Save config</button>
       <button type="button" id="loadCfg">Load config</button>
     </div>
     <p class="hint" style="margin-top:12px">Paste JSON if the file dialog is not available:</p>
-    <textarea id="configPaste" spellcheck="false" placeholder='{"uid":"...","piece_base":"piece_","controls":[],"properties":[],"rules":[]}'></textarea>
+    <textarea id="configPaste" spellcheck="false" placeholder='{"uid":"...","piece_base":"piece_","controls":[],"properties":[]}'></textarea>
     <div class="row-actions"><button type="button" id="loadPaste">Load pasted config</button></div>
   </details>
 
@@ -611,6 +594,8 @@ function addCtrl(row, selected) {
 }
 
 function addRule(rule) {
+  const body = $("rulesTable") && $("rulesTable").querySelector("tbody");
+  if (!body) return null;
   const r = rule || { propertyName: "Device", propertyValue: "", objectName: "", controlName: "", offsetAdd: "0.05" };
   const tr = document.createElement("tr");
   const keys = ["propertyName", "propertyValue", "objectName", "controlName", "offsetAdd"];
@@ -622,7 +607,7 @@ function addRule(rule) {
   const tdX = document.createElement("td");
   tdX.appendChild(iconButton("×", () => tr.remove()));
   tr.appendChild(tdX);
-  $("rulesTable").querySelector("tbody").appendChild(tr);
+  body.appendChild(tr);
   return tr;
 }
 
@@ -655,7 +640,9 @@ function readCtrls() {
 }
 
 function readRules() {
-  return [...$("rulesTable").querySelectorAll("tbody tr")].map((tr) => {
+  const table = $("rulesTable");
+  if (!table) return [];
+  return [...table.querySelectorAll("tbody tr")].map((tr) => {
     const ins = [...tr.querySelectorAll("input")];
     return {
       propertyName: ins[0].value,
@@ -947,7 +934,7 @@ function buildFiles() {
   const p = runParams();
   const props = readProps();
   const ctrls = readCtrls();
-  const rules = readRules();
+  const rules = [];
   const weekStart = isoWeekStart(p.year, p.week);
   const total = p.days * 24 * 3600;
   const interval = p.num > 1 ? total / p.num : 0;
@@ -1120,10 +1107,6 @@ function loadConfig(cfg) {
   $("ctrlTable").querySelector("tbody").replaceChildren();
   (cfg.properties || []).forEach((p) => addProp(p[0], p[1]));
   (cfg.controls || []).forEach((c) => addCtrl(c));
-  if (Array.isArray(cfg.rules)) {
-    $("rulesTable").querySelector("tbody").replaceChildren();
-    cfg.rules.forEach((r) => addRule(r || {}));
-  }
   $("selAll").checked = false;
   $("selAll").indeterminate = false;
   if (cfg.noise_ranges) applyNoiseRanges(cfg.noise_ranges);
@@ -1460,13 +1443,6 @@ async function onGenerate() {
 
 $("addProp").addEventListener("click", () => addProp("", ""));
 $("addCtrl").addEventListener("click", () => addCtrl());
-$("addRule").addEventListener("click", () => addRule({
-  propertyName: "Device",
-  propertyValue: "",
-  objectName: "",
-  controlName: "",
-  offsetAdd: "0.05"
-}));
 $("applyAll").addEventListener("click", () => applyNoise(false));
 $("applySel").addEventListener("click", () => applyNoise(true));
 $("randAll").addEventListener("click", () => randomizeNoise(false));
@@ -1569,13 +1545,6 @@ document.addEventListener("wheel", (e) => {
 $("uid").value = uuid();
 DEFAULT_PROPS.forEach((p) => addProp(p[0], p[1]));
 DEFAULT_CTRLS.forEach((c) => addCtrl(c));
-addRule({
-  propertyName: "Device",
-  propertyValue: "Crysta Apex 1",
-  objectName: "circle 1",
-  controlName: "Diameter",
-  offsetAdd: "0.05"
-});
 syncPreviewState();
 function syncHeaderOffset() {
   const header = document.querySelector("header");
