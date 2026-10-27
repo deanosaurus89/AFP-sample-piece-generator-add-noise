@@ -1621,12 +1621,12 @@ const TOUR_STEPS = [
   },
   {
     title: "Measured values only",
-    body: "This version writes measured values (Ist-Werte) for controls — no geometry. Delete controls you do not need, or add new ones.",
+    body: "This version writes measured values for controls — no geometry. Delete controls you do not need, or add new ones. For GD&T form tolerances, only positive values make sense. The app does not detect this automatically. Turn on Only >0 yourself for Flatness and similar GD&T form controls.",
     target: () => $("ctrlScroll")
   },
   {
     title: "Import a CSV template",
-    body: "Easiest path: in the Inspector, create a CSV template, then Import CSV here. Controls and the piece UID are filled in. Then set scatter, offsets, and noise.",
+    body: "Easiest path: in the Inspector, create a CSV template, then Import CSV here. Controls, properties, and the piece UID are filled in. Then set scatter, offsets, and noise.",
     target: () => $("template")
   },
   {
@@ -1641,7 +1641,7 @@ const TOUR_STEPS = [
   },
   {
     title: "Properties",
-    body: "Set properties when a part needs them. A comma-separated list picks one value at random for each part.",
+    body: "Properties are imported when they are part of the CSV template. You can always add new properties, delete properties, or add new choice options as comma-separated values in the property field. One of those values is picked at random for each part.",
     target: () => $("properties")
   },
   {
