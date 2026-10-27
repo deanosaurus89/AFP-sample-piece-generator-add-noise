@@ -6,7 +6,7 @@ The page is a single file (`index.html`, CSS and JavaScript embedded). It runs o
 
 ## Use
 
-1. Open `index.html` in a browser, or the GitHub Pages address below.
+1. Open `index.html` in a browser, or the GitHub Pages address below. The first visit opens a short tour (Skip or Done remembers that). **Tour** in the header starts it again.
 2. **Import CSV** (compact bar at the top): a PolyWorks AFP CSV loads the piece-template UID, the property rows (name plus example value), and the controls. Nominal comes from Measured Value; offset 0, std. dev. 0.1, trend 0, mode Gaussian. UTF-8, UTF-16 LE, and UTF-16 BE (with a BOM, or without one for Latin text). The import replaces the current properties and controls. Add more rows afterwards. A real UTF-16 LE export is at `examples/oede-milkyway-combinator.csv`.
 3. **Run** (pinned while scrolling; use Pin to release it): piece base, year, ISO week, workdays (1–7), part count, ZIP file name. The UID field is filled from `PIECE TEMPLATE DATALOOP UID` on CSV import. Trailing digits in the piece base are the first piece number and the zero-padding width: `Piece_000001` with 100 parts is `Piece_000001` … `Piece_000100`. If the number needs more digits than that width, it grows. With no trailing digits, names run `piece_1` … `piece_100`. The CSV file name and the `Piece name` field are that same string. Older configs may still contain `start_index`; it is ignored.
 4. **Properties:** name plus a value pool. Comma-separated entries are picked at random per part. A single value with no comma stays fixed. An empty pool stays empty.
