@@ -1661,6 +1661,12 @@ const TOUR_STEPS = [
     prepare() { $("csvDetails").open = true; }
   },
   {
+    title: "Config",
+    body: "Config JSON saves and reloads the full setup: Run, Properties, Controls (with noise settings), and the randomize ranges — not only what came from the template CSV. After you import a template, save it here to keep your corrections and extensions, or to share them, without tuning again. A file and pasted JSON do the same thing.",
+    target: () => $("configPanel"),
+    prepare() { $("configPanel").open = true; }
+  },
+  {
     title: "Generate the ZIP",
     body: "Generate CSVs (ZIP) writes the full batch. Copy the files from that ZIP into the folder AFP watches.",
     target: () => $("generate")
